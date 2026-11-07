@@ -11,7 +11,8 @@ export async function render(root, params, query) {
   const [conv, checklists] = await Promise.all([api.conversation(params.id), api.checklists()]);
   const seconds = conv.transcript.map((m) => tsSeconds(m.timestamp, conv.transcript[0]?.timestamp));
   const duration = seconds.filter((s) => s !== null).pop();
-  ctx = { root, conv, checklists, seconds, evaluation: null, openCrit: query.crit || null };
+  ctx = { root, conv, checklists, seconds, audioSec: audioTimeline(conv.transcript, seconds, null),
+          evaluation: null, openCrit: query.crit || null };
   const active = checklists.find((c) => c.is_active) || checklists[0];
   const isCall = conv.channel === "voice call" || !!conv.audio_url;
 
@@ -32,7 +33,7 @@ export async function render(root, params, query) {
     ${isCall ? `
       <div class="card player">
         <b>🎧 Запись звонка</b>
-        ${conv.audio_url ? `<audio id="audio" controls preload="none" src="${esc(conv.audio_url)}"></audio>
+        ${conv.audio_url ? `<audio id="audio" controls preload="metadata" src="${esc(api.audioUrl(conv.id))}"></audio>
           <a class="btn btn-sm" href="${esc(conv.audio_url)}" target="_blank" rel="noopener">Открыть в плеере ↗</a>`
           : `<span class="muted">Ссылка на запись отсутствует</span>`}
         <span class="muted small" id="audio-pos"></span>
@@ -42,7 +43,7 @@ export async function render(root, params, query) {
         <div class="card-head"><h2>Расшифровка</h2><div class="spacer"></div>
           <span class="muted small">Бот и система — контекст, не оцениваются</span></div>
         <div class="transcript" id="transcript">
-          ${conv.transcript.map((m, i) => msgHtml(m, i + 1, seconds[i], isCall && conv.audio_url)).join("")}
+          ${conv.transcript.map((m, i) => msgHtml(m, i + 1, ctx.audioSec[i], isCall && conv.audio_url)).join("")}
         </div>
       </section>
       <section class="card" id="eval-panel"></section>
@@ -54,7 +55,17 @@ export async function render(root, params, query) {
   });
   $("#btn-eval", root).addEventListener("click", (e) => runEvaluation(e.currentTarget));
   const audio = $("#audio", root);
-  if (audio) audio.addEventListener("timeupdate", () => syncAudio(audio.currentTime));
+  if (audio) {
+    audio.addEventListener("timeupdate", () => syncAudio(audio.currentTime));
+    audio.addEventListener("loadedmetadata", () => {
+      // The real file length tells how much of the recording pause was cut out; refine the mapping.
+      ctx.audioSec = audioTimeline(conv.transcript, ctx.seconds, audio.duration);
+      $$("[data-play]", root).forEach((b) => {
+        const s = ctx.audioSec[Number(b.dataset.play) - 1];
+        if (s !== null) { b.textContent = `▶ ${fmtClock(s)}`; b.title = `Прослушать с ${fmtClock(s)}`; }
+      });
+    });
+  }
 
   const evId = query.eval ? Number(query.eval) : conv.evaluations[0]?.id;
   if (evId) await loadEvaluation(evId);
@@ -83,9 +94,40 @@ function msgHtml(m, n, sec, playable) {
     </div>`;
 }
 
+// Transcript time -> position in the recording.
+// - the file starts at the "recording started" event (a callback may have lines before it);
+// - during "recording paused … resumed" part of the pause is cut from the file: the cut is measured as
+//   (transcript length from recording start) - (file duration); without the duration, the whole pause;
+// - timestamps mark roughly the end of a phrase, so playback starts a few seconds earlier.
+const AUDIO_LEAD = 3;
+
+function audioTimeline(transcript, rel, duration) {
+  const find = (re, from = 0) => transcript.findIndex((m, i) => i >= from && m.speaker === "system" && re.test(m.text));
+  const iStart = find(/транскрибирование запущены|транскрипция басталды|recording.*start/i);
+  const iPause = find(/транскрибирование приостановлены|recording.*paus/i);
+  const iResume = iPause >= 0 ? find(/транскрибирование возобновлены|recording.*resum/i, iPause) : -1;
+  const start = iStart >= 0 ? rel[iStart] ?? 0 : 0;
+  const pause = iResume >= 0 ? rel[iPause] : null;
+  const resume = iResume >= 0 ? rel[iResume] : null;
+  const end = rel.filter((s) => s !== null).pop() ?? 0;
+  let cut = 0;
+  if (pause !== null && resume !== null) {
+    cut = duration && Number.isFinite(duration) ? Math.max(0, end - start - duration) : resume - pause;
+  }
+  return rel.map((s) => {
+    if (s === null) return null;
+    let a = s - start;
+    if (pause !== null) {
+      if (s >= resume) a -= cut;
+      else if (s > pause) a = pause - start;
+    }
+    return Math.max(0, Math.round(a - AUDIO_LEAD));
+  });
+}
+
 function playAt(n) {
   const audio = $("#audio", ctx.root);
-  const s = ctx.seconds[n - 1];
+  const s = ctx.audioSec[n - 1];
   if (!audio || s === null) return;
   audio.currentTime = s;
   audio.play().catch(() => toast("Браузер не смог воспроизвести запись — откройте её в плеере", true));

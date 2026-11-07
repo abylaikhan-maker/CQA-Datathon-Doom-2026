@@ -45,6 +45,7 @@ export const api = {
 
   conversations: (params = {}) => req("GET", "/api/conversations" + qs(params)),
   conversation: (id) => req("GET", `/api/conversations/${encodeURIComponent(id)}`),
+  audioUrl: (id) => `${base()}/api/audio/${encodeURIComponent(id)}`,
 
   checklists: () => req("GET", "/api/checklists"),
   checklist: (id) => req("GET", `/api/checklists/${id}`),

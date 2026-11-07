@@ -81,7 +81,11 @@ backend/app/
 
 **Dynamics 365.** UI не зависит от фреймворков и сборки. Каждый экран монтируется в переданный DOM-узел, адрес API задаётся через `window.CQA_CONFIG.apiBase`. Поэтому файлы можно загрузить как HTML/JS веб-ресурсы, а бэкенд оставить внешним сервисом.
 
-**Стоимость.** Для каждой оценки сохраняются токены (вход и выход, включая thinking) и цена по `PRICE_*`. Средняя стоимость одной оценки видна в «Аналитике» и в карточке. Одна оценка — один вызов модели, при ошибках 429/5xx делаются повторы.
+**Стоимость.** Для каждой оценки сохраняются токены (вход и выход, включая thinking) и цена по `PRICE_*`. Средняя стоимость одной оценки видна в «Аналитике» и в карточке. Одна оценка — один вызов модели, при ошибках 429/5xx делаются повторы. На наборе DEV (65 диалогов) с `gemini-2.5-flash` одна оценка стоит в среднем **≈ $0.01** и занимает ≈ 16 с. С `GEMINI_THINKING_BUDGET=0` она стоит ≈ $0.005 и занимает ≈ 6 с, но точность ниже, поэтому по умолчанию рассуждения включены.
+
+**Уточнения к критериям.** Кроме формулировки из PDF, у каждого критерия есть поле «Уточнения для оценки» (`guidance`). В нём описаны пограничные случаи: что считать N/A, чем 4 отличается от 7 по шкале 06, что не считается нарушением. Поле редактируется в «Чек-листах» и попадает в промпт. Памятка со стр. 3 PDF перенесена в «Общие правила».
+
+**Звонки.** Перед оценкой точные дубли реплик (тот же говорящий, время и текст) пропускаются. Реплики, сказанные пока клиент был на удержании, помечаются для модели как внутренние: клиент их не слышал. Нумерация реплик при этом не меняется. Ссылка организаторов на запись — это HTML-страница с mp3 по подписи, которая действует около часа. Поэтому `GET /api/audio/{id}` один раз скачивает файл в кэш и отдаёт его с поддержкой перемотки. Карточка сопоставляет время транскрипта с позицией в записи: учитывает начало записи, вырезанную паузу (по фактической длительности файла) и запускает воспроизведение на 3 с раньше метки.
 
 ## Тесты
 
@@ -89,6 +93,15 @@ backend/app/
 docker run --rm -v "$PWD/backend:/w" -w /w python:3.12-slim sh -c "pip install -q pytest && python -m pytest -q tests"
 ```
 
+## Замер точности
+
+`tools/accuracy.py` сравнивает последние оценки с ручной разметкой. Он выдаёт совпадение по каждому критерию, разбивку по языкам и каналам, среднюю ошибку итогового балла и список расхождений. Итог для эталона считается тем же `scoring.py`, что и в приложении.
+
+```bash
+python3 tools/accuracy.py --api http://localhost:8090 --gt ground_truth.json --show c02,c06
+python3 tools/push_checklist.py --api http://localhost:8090 --note "что изменено"   # загрузить чек-лист из файла новой версией
+```
+
 ## API (кратко)
 
-`POST /api/datasets/import {group_id}` · `POST /api/datasets/upload` · `GET /api/conversations` · `GET /api/conversations/{id}` · `GET|POST /api/checklists` · `POST /api/evaluations {conversation_id, checklist_id}` · `POST /api/batches {group, checklist_id, only_missing}` · `POST /api/appeals` · `POST /api/appeals/{id}/decision {decision: confirm|change, new_answer, reason}` · `GET /api/stats` · `GET /api/export.csv`
+`POST /api/datasets/import {group_id}` · `POST /api/datasets/upload` · `GET /api/conversations` · `GET /api/conversations/{id}` · `GET /api/audio/{id}` · `GET|POST /api/checklists` · `POST /api/evaluations {conversation_id, checklist_id}` · `POST /api/batches {group, checklist_id, only_missing}` · `POST /api/appeals` · `POST /api/appeals/{id}/decision {decision: confirm|change, new_answer, reason}` · `GET /api/stats` · `GET /api/export.csv`

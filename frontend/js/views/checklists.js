@@ -75,7 +75,7 @@ function newCriterion() {
   while (draft.criteria.some((c) => c.id === id)) id += "x";
   return {
     id, code: String(n).padStart(2, "0"), section: draft.sections[0]?.id || "", title: "",
-    type: "binary", weight: 10, na_allowed: false, description: "", na_condition: "",
+    type: "binary", weight: 10, na_allowed: false, description: "", guidance: "", na_condition: "",
   };
 }
 
@@ -143,6 +143,8 @@ function critEditor(c, i) {
         <label class="field" style="justify-content:flex-end"><span class="check"><input type="checkbox" data-k="${k("na_allowed")}" data-redraw ${c.na_allowed ? "checked" : ""}> N/A разрешён</span></label>
         <label class="field span6">Формулировка / что значит «Да»
           <textarea class="input" rows="2" data-k="${k("description")}">${esc(c.description || "")}</textarea></label>
+        <label class="field span6">Уточнения для оценки (памятка для модели: пограничные случаи, что не считать нарушением)
+          <textarea class="input" rows="3" data-k="${k("guidance")}">${esc(c.guidance || "")}</textarea></label>
         ${c.na_allowed ? `<label class="field span6">Условие N/A<input class="input" data-k="${k("na_condition")}" value="${esc(c.na_condition || "")}"></label>` : ""}
         ${c.type === "scale" ? `
           <div class="field span6"><span>Шкала (верхняя ступень даёт полный вес)</span>
