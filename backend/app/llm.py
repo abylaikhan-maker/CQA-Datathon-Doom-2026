@@ -64,18 +64,22 @@ async def evaluate(cfg: dict, conv: dict) -> tuple[dict, dict, str]:
 
 
 async def _gemini(cfg: dict, conv: dict) -> tuple[dict, dict, str]:
+    return await gemini_json(SYSTEM_PROMPT, build_user_prompt(cfg, conv), RESPONSE_SCHEMA)
+
+
+async def gemini_json(system_prompt: str, user_prompt: str, schema: dict) -> tuple[dict, dict, str]:
     model = config.GEMINI_MODEL
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
     gen_cfg: dict = {
         "temperature": 0,
         "responseMimeType": "application/json",
-        "responseSchema": RESPONSE_SCHEMA,
+        "responseSchema": schema,
     }
     if config.GEMINI_THINKING_BUDGET >= 0:
         gen_cfg["thinkingConfig"] = {"thinkingBudget": config.GEMINI_THINKING_BUDGET}
     body = {
-        "systemInstruction": {"parts": [{"text": SYSTEM_PROMPT}]},
-        "contents": [{"role": "user", "parts": [{"text": build_user_prompt(cfg, conv)}]}],
+        "systemInstruction": {"parts": [{"text": system_prompt}]},
+        "contents": [{"role": "user", "parts": [{"text": user_prompt}]}],
         "generationConfig": gen_cfg,
     }
     headers = {"x-goog-api-key": config.GEMINI_API_KEY, "content-type": "application/json"}

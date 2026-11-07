@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, StringConstraints
 
-from . import accuracy, audio, config, dataset, db, evaluator, rule_checks, scoring, version
+from . import accuracy, audio, config, dataset, db, evaluator, radar, rule_checks, scoring, version
 
 _bg: set[asyncio.Task] = set()
 
@@ -32,12 +32,17 @@ async def lifespan(_: FastAPI):
         await conn.execute("UPDATE evaluations SET status='error', error='interrupted by restart' "
                            "WHERE status IN ('pending','running')")
         await conn.execute("UPDATE batches SET status='finished', finished_at=now() WHERE status='running'")
+        await conn.execute(
+            """UPDATE radar_runs SET status='error', error='Анализ прерван перезапуском сервиса.',
+                      finished_at=now() WHERE status='running'"""
+        )
     yield
     await db.close()
 
 
 app = FastAPI(title="CQA — Conversation Quality Analytics", lifespan=lifespan)
 app.include_router(rule_checks.router)
+app.include_router(radar.router)
 
 
 @app.exception_handler(dataset.DatasetError)

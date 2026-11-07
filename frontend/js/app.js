@@ -10,6 +10,7 @@ import * as ruleCheck from "./views/rule-check.js";
 import * as appeals from "./views/appeals.js";
 import * as analytics from "./views/analytics.js";
 import * as accuracy from "./views/accuracy.js";
+import * as radar from "./views/radar.js";
 
 const routes = [
   { re: /^\/conversations$/, view: conversations, nav: "conversations", title: "Разговоры", skel: "list" },
@@ -21,6 +22,7 @@ const routes = [
   { re: /^\/appeals\/(\d+)$/, view: appeals, nav: "appeals", keys: ["id"], title: "Апелляции", skel: "split" },
   { re: /^\/accuracy$/, view: accuracy, nav: "accuracy", title: "Точность", skel: "list" },
   { re: /^\/analytics$/, view: analytics, nav: "analytics", title: "Аналитика", skel: "list" },
+  { re: /^\/radar$/, view: radar, nav: "radar", title: "Радар проблем", skel: "list" },
 ];
 
 let cleanup = null;
@@ -69,7 +71,7 @@ async function route() {
     a.classList.toggle("active", on);
     if (on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
   });
-  document.getElementById("reports-menu").classList.toggle("active", ["analytics", "accuracy"].includes(m.r.nav));
+  document.getElementById("reports-menu").classList.toggle("active", ["analytics", "accuracy", "radar"].includes(m.r.nav));
   document.title = `${m.r.title} · CQA`;
   const params = {};
   (m.r.keys || []).forEach((k, i) => (params[k] = decodeURIComponent(m.m[i + 1])));

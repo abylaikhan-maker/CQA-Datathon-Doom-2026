@@ -1,0 +1,85 @@
+.radar-actions {
+  margin-left: auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+}
+.radar-history { width: min(100%, 350px); margin: 0 0 16px; }
+.radar-history[hidden] { display: none; }
+.radar-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.radar-metric { display: grid; gap: 5px; }
+.radar-metric > span { color: var(--ink-2); font-size: 13px; }
+.radar-metric strong { font-size: 27px; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.radar-metric small { font-size: 15px; font-weight: 500; color: var(--ink-2); }
+.radar-run-meta { margin: 10px 0 20px; }
+
+.radar-progress-heading { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; }
+.radar-progress-heading h2 { margin: 0; }
+.radar-progress progress { display: block; width: 100%; height: 10px; margin-top: 12px; accent-color: var(--brand-700); }
+.radar-progress p { margin-bottom: 0; }
+.radar-sr { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.radar-warning {
+  margin: 0 0 14px;
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--warn-bg);
+  color: var(--warn);
+  overflow-wrap: anywhere;
+}
+.radar-warning p { margin: 4px 0 0; }
+
+.radar-results-list { display: grid; gap: 9px; }
+.radar-results-heading h2 { margin: 0; font-size: 20px; letter-spacing: -.025em; }
+.radar-results-heading p { margin: 3px 0 4px; }
+.radar-problem { overflow: hidden; }
+.radar-problem > summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  list-style: none;
+  cursor: pointer;
+}
+.radar-problem > summary::-webkit-details-marker { display: none; }
+.radar-problem > summary::before {
+  content: "";
+  flex: 0 0 6px;
+  width: 6px;
+  height: 6px;
+  border: solid var(--ink-2);
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(-45deg);
+}
+.radar-problem[open] > summary::before { transform: translateY(-2px) rotate(45deg); }
+.radar-problem > summary:hover { background: var(--surface-2); }
+.radar-problem > summary:focus-visible { outline: 2px solid var(--brand-600); outline-offset: -2px; }
+.radar-problem-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.radar-problem-text strong { display: block; font-size: 16px; }
+.radar-category { color: var(--ink-2); font-size: 12px; }
+.radar-count { flex: none; }
+.radar-quotes { list-style: none; padding: 0; margin: 0; }
+.radar-quote {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 18px 12px 36px;
+  border-top: 1px solid var(--line);
+}
+.radar-quote-main { min-width: 0; overflow-wrap: anywhere; }
+.radar-quote-meta { display: flex; flex-wrap: wrap; gap: 4px 12px; color: var(--ink-2); font-size: 12.5px; }
+.radar-quote blockquote { margin: 4px 0 0; white-space: pre-wrap; }
+.radar-source { flex: none; }
+
+@media (max-width: 680px) {
+  .radar-actions { margin-left: 0; }
+  .radar-metrics { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .radar-metric { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+  .radar-metric strong { font-size: 23px; }
+  .radar-problem > summary { align-items: flex-start; padding: 12px; gap: 9px; }
+  .radar-problem > summary::before { margin-top: 10px; }
+  .radar-problem-text strong { font-size: 14px; }
+  .radar-quote { flex-direction: column; gap: 8px; padding: 10px 12px 10px 27px; }
+}

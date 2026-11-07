@@ -53,6 +53,9 @@ export const api = {
   accuracyRun: (id, { gtId, compare } = {}) =>
     req("GET", `/api/accuracy/${id}?${new URLSearchParams({ ...(gtId ? { gt_id: gtId } : {}), ...(compare ? { compare } : {}) })}`),
   updateBatchNote: (id, note) => req("PATCH", `/api/batches/${id}`, { note }),
+  radarRuns: (group) => req("GET", "/api/radar/runs" + qs({ group })),
+  radarRun: (id) => req("GET", `/api/radar/runs/${id}`),
+  startRadar: (group) => req("POST", "/api/radar/runs", { group }),
 
   checklists: () => req("GET", "/api/checklists"),
   checklist: (id) => req("GET", `/api/checklists/${id}`),
