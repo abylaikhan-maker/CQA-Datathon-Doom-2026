@@ -8,7 +8,7 @@ import { esc, $, toast, busy, plural, icon, answerView, fmtDate } from "../util.
 
 const DRAFT_KEY = "cqa.ruleDraft"; // hand-off to the checklist editor (views/checklists.js)
 const forms = {
-  conv: ["разговор", "разговора", "разговоров"],
+  conv: ["диалог", "диалога", "диалогов"],
   crit: ["критерий", "критерия", "критериев"],
   case: ["исправление", "исправления", "исправлений"],
 };
@@ -17,7 +17,7 @@ export async function render(root, params, query) {
   const list = await api.checklists();
   if (!root.isConnected) return;
   if (!list.length) {
-    root.innerHTML = `${head()}<div class="card empty-state"><h3>Чек-листов пока нет</h3><p>Создайте чек-лист и оцените разговоры.</p>
+    root.innerHTML = `${head()}<div class="card empty-state"><h3>Чек-листов пока нет</h3><p>Создайте чек-лист и оцените диалоги.</p>
       <a class="btn btn-primary" href="#/checklists/new">Новый чек-лист</a></div>`;
     return;
   }
@@ -59,7 +59,7 @@ export async function render(root, params, query) {
 const head = () => `
   <header class="page-head">
     <div><h1>Правила из апелляций</h1>
-      <div class="sub">Чек-лист дообучается на решениях проверяющих: если ответ модели по критерию исправляли в нескольких разных разговорах, Gemini предлагает дополнить инструкцию этого критерия. Учитываются только апелляции, где оценка изменена и указана причина.</div></div>
+      <div class="sub">Чек-лист дообучается на решениях проверяющих: если ответ модели по критерию исправляли в нескольких разных диалогах, Gemini предлагает дополнить инструкцию этого критерия. Учитываются только апелляции, где оценка изменена и указана причина.</div></div>
     <div class="spacer"></div>
     <div class="page-actions"><a class="btn" href="#/appeals">К апелляциям</a></div>
   </header>`;
@@ -83,7 +83,7 @@ async function drawVersion(box, ver, list) {
       <div class="card kpi ${readyCrits.length ? "is-good" : ""}"><span class="lbl">${icon("check")}Готово к предложению</span><span class="v">${readyCrits.length}</span>
         <span class="foot">${min}+ разных ${plural(min, forms.conv)} по критерию</span></div>
       <div class="card kpi"><span class="lbl">${icon("clock")}Копят кейсы</span><span class="v">${withCases.length - readyCrits.length}</span>
-        <span class="foot">нужно ещё исправление в другом разговоре</span></div>
+        <span class="foot">нужно ещё исправление в другом диалоге</span></div>
     </div>
     ${latest.id !== ver.id ? `<div class="note rl-note">Новая версия будет создана на основе последней — <b>v${latest.version}</b>, чтобы не потерять изменения после v${ver.version}.</div>` : ""}
     ${withCases.length ? withCases.map((c) => critCard(c, items.get(c.id), min)).join("")
@@ -200,7 +200,7 @@ async function saveVersion(btn, checklist, latest, ver) {
     out.innerHTML = `
       <div class="rl-done">
         <div class="rl-proposal-h">${icon("check")}<b>Создана версия v${saved.version}</b><span class="muted small">${esc(fmtDate(saved.created_at))} · пока не активна</span></div>
-        <p class="rl-why">Перед включением сравните v${ver.version} и v${saved.version} на контрольных примерах по этому критерию — разговорам, где правильный ответ известен.</p>
+        <p class="rl-why">Перед включением сравните v${ver.version} и v${saved.version} на контрольных примерах по этому критерию — диалогам, где правильный ответ известен.</p>
         <div class="rl-actions">
           <a class="btn btn-primary" href="#/checklists/${saved.id}/rule-check?${rc}">${icon("check")}Проверить правило</a>
           <button type="button" class="btn" data-activate="${saved.id}">Сделать активной</button>

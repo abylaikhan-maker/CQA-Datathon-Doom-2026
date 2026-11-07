@@ -95,7 +95,7 @@ function sectionHtml({ check, error, running }) {
     </div></div>`;
   }
   if (check.status === "none") {
-    return `${head(runBtn(false))}<div class="cv-reg-body">${progress || `<div class="cv-reg-empty">Разговор ещё не сверяли. Загружено документов: ${check.regulation_count}.</div>`}</div>`;
+    return `${head(runBtn(false))}<div class="cv-reg-body">${progress || `<div class="cv-reg-empty">Диалог ещё не сверяли. Загружено документов: ${check.regulation_count}.</div>`}</div>`;
   }
 
   const items = sorted(check);

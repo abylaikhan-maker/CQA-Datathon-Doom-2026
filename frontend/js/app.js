@@ -15,7 +15,7 @@ import * as verify from "./views/verify.js";
 import * as rules from "./views/rules.js";
 
 const routes = [
-  { re: /^\/conversations$/, view: conversations, nav: "conversations", title: "Разговоры", skel: "list" },
+  { re: /^\/conversations$/, view: conversations, nav: "conversations", title: "Диалоги", skel: "list" },
   { re: /^\/conversation\/(.+)$/, view: card, nav: "conversations", keys: ["id"], title: "Диалог", skel: "split" },
   { re: /^\/checklists$/, view: checklists, nav: "checklists", title: "Чек-листы", skel: "split" },
   { re: /^\/checklists\/(new|\d+)$/, view: checklists, nav: "checklists", keys: ["id"], title: "Чек-листы", skel: "split" },

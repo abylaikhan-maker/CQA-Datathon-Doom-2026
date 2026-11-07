@@ -52,7 +52,7 @@ export async function render(root, params, query = {}) {
           : showCases ? `<div class="ap-empty"><span class="ap-empty-ic" aria-hidden="true">${cvIcon("scale")}</span><b>Кейсов в этой категории пока нет</b>
               <span>Сохраните кейс в карточке апелляции, чтобы он появился здесь.</span></div>`
           : `<div class="ap-empty"><span class="ap-empty-ic" aria-hidden="true">${cvIcon("scale")}</span><b>${tab === "open" ? "Нет апелляций на рассмотрении" : "Пока нет рассмотренных апелляций"}</b>
-              <span>${tab === "open" ? "Оспорить оценку можно в разборе разговора: откройте критерий и нажмите «Оспорить оценку»." : "Решения проверяющих появятся здесь."}</span></div>`}
+              <span>${tab === "open" ? "Оспорить оценку можно в разборе диалога: откройте критерий и нажмите «Оспорить оценку»." : "Решения проверяющих появятся здесь."}</span></div>`}
         </div>
       </div>
       </div>`;

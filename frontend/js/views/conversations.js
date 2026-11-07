@@ -13,7 +13,7 @@ const store = {
 // Survives navigation to a card and back.
 const state = {
   group: store.get("cqa.group") || "", checklistId: null,
-  lang: "", status: "", q: "", band: "", cols: {},
+  lang: "", status: "", q: "", band: "", crit: "", cols: {},
   sort: { key: "id", dir: 1 },
 };
 let activePoll = null;
@@ -30,6 +30,8 @@ const STATUS = [
 ];
 const isNew = (r) => !r.eval_id || r.status === "error";
 const ANSWER_LABELS = ["Да", "Нет", "Частично", "N/A", "—"];
+// «Грубая ошибка»: one column for every critical criterion of the checklist.
+const CRIT_OPTS = [["violation", "Нарушение"], ["clean", "— (нет нарушения)"], ["none", "нет оценки"]];
 const BANDS = [
   { v: "hi", label: "≥ 85" }, { v: "mid", label: "65–85" }, { v: "lo", label: "< 65" }, { v: "none", label: "нет" },
 ];
@@ -61,7 +63,7 @@ export async function render(root) {
   root.innerHTML = `<div class="conv-page">
     <header class="page-head">
       <div>
-        <h1>Разговоры</h1>
+        <h1>Диалоги</h1>
         <div class="sub">Обращения в службу поддержки (расшифровки): загрузите набор, выберите версию чек-листа и запустите оценку. Строка открывает разбор с объяснениями.</div>
       </div>
       <div class="spacer"></div>
@@ -74,9 +76,9 @@ export async function render(root) {
     <div id="guide"></div>
     <div id="batch"></div>
     <div class="kpis" id="kpis"></div>
-    <section class="card conv-card" aria-label="Список разговоров">
+    <section class="card conv-card" aria-label="Список диалогов">
       <div class="card-head">
-        <h2>Журнал разговоров</h2>
+        <h2>Журнал диалогов</h2>
         <label class="conv-sort"><span>Сортировка</span>
           <select class="input" id="f-sort">
             ${SORT_OPTIONS.map(([value, label]) => `<option value="${value}">${label}</option>`).join("")}
@@ -105,7 +107,7 @@ export async function render(root) {
           <button class="btn" type="button" id="btn-rebatch" title="Заново оценить все диалоги выбранным чек-листом">${icon("refresh")}Переоценить все</button>
         </div>
       </div>
-      <div class="table-wrap" id="table" role="region" aria-label="Таблица разговоров" tabindex="0"></div>
+      <div class="table-wrap" id="table" role="region" aria-label="Таблица диалогов" tabindex="0"></div>
       <div class="table-foot" id="foot"></div>
     </section></div>`;
   const page = root.firstElementChild;
@@ -114,7 +116,7 @@ export async function render(root) {
   let checklistConfig, loadedChecklistId, loadedGroup;
   let loadId = 0;
   const criteria = () => checklistConfig?.criteria || [];
-  const colActive = () => !!state.band || Object.values(state.cols).some(Boolean);
+  const colActive = () => !!state.band || !!state.crit || Object.values(state.cols).some(Boolean);
   const filtersActive = () => !!(state.lang || state.status || state.q.trim()) || colActive();
 
   async function load() {
@@ -142,6 +144,7 @@ export async function render(root) {
       (skip === "lang" || !state.lang || r.language === state.lang) &&
       (skip === "status" || !st?.test || st.test(r)) &&
       (skip === "band" || !state.band || bandOf(r) === state.band) &&
+      (skip === "crit" || !state.crit || critOf(r) === state.crit) &&
       criteria().every((c) => skip === `col:${c.id}` || !state.cols[c.id] || criterionResult(c, criterionScore(r, c)).label === state.cols[c.id]) &&
       (!q || r.id.toLowerCase().includes(q) || r.title?.toLowerCase().includes(q)));
   }
@@ -375,20 +378,31 @@ export async function render(root) {
         </div>`;
       return;
     }
-    const columns = criteria();
+    const columns = criteria().filter((c) => c.type !== "critical");
+    const langs = [...new Set(rows.map((r) => r.language).filter(Boolean))]
+      .sort((a, b) => (LANG_ORDER.indexOf(a) + 1 || 99) - (LANG_ORDER.indexOf(b) + 1 || 99) || a.localeCompare(b));
+    const nFixed = 6;
     t.innerHTML = `
-      <table class="table conv-table${columns.length > 10 ? " is-stacked" : ""}" role="table" aria-label="Диалоги и результаты оценки">
-        <colgroup><col class="conv-name-col"><col class="conv-total-col">${columns.map(() => "<col>").join("")}</colgroup>
+      <table class="table conv-table${columns.length > 9 ? " is-stacked" : ""}" role="table" aria-label="Диалоги и результаты оценки">
+        <colgroup><col class="cc-id"><col class="cc-lang"><col class="cc-msgs"><col class="cc-status"><col class="cc-total"><col class="cc-crit">${columns.map(() => "<col>").join("")}</colgroup>
         <thead role="rowgroup"><tr role="row">
-          ${th("id", "Разговор")}
+          ${th("id", "Диалог")}
+          <th role="columnheader" scope="col">Язык</th>
+          ${th("messages", "Реплик", "num")}
+          <th role="columnheader" scope="col">Статус</th>
           ${th("score", "Итог", "num")}
+          <th role="columnheader" scope="col" class="criterion-col">Грубая ошибка</th>
           ${columns.map((c) => `<th role="columnheader" scope="col" class="criterion-col" title="${esc(criterionName(c))}" aria-label="${esc(criterionName(c))}">
-            ${c.code ? `<span class="criterion-code">${esc(c.code)}</span>` : ""}${esc(shortCriterionTitle(c))}
+            ${c.code ? `<span class="criterion-code">${esc(c.code)}</span>` : ""}${softWrap(esc(shortCriterionTitle(c)))}
           </th>`).join("")}
         </tr>
         <tr role="row" class="conv-colfilters">
           <th scope="col"><span class="sr-only">Фильтры колонок</span></th>
+          <th scope="col">${colSelect("lang", "Язык", langs.map((l) => [l, l, count("lang", (r) => r.language === l)]), state.lang)}</th>
+          <th scope="col"></th>
+          <th scope="col">${colSelect("status", "Статус", STATUS.filter((x) => x.v).map((x) => [x.v, x.label, count("status", x.test)]), state.status)}</th>
           <th scope="col">${colSelect("band", "Итог", BANDS.map((b) => [b.v, b.label, count("band", (r) => bandOf(r) === b.v)]), state.band)}</th>
+          <th scope="col">${colSelect("crit", "Грубая ошибка", CRIT_OPTS.map(([v, l]) => [v, l, count("crit", (r) => critOf(r) === v)]), state.crit)}</th>
           ${columns.map((c) => {
             const opts = ANSWER_LABELS.map((l) => [l, l, count(`col:${c.id}`, (r) => criterionResult(c, criterionScore(r, c)).label === l)])
               .filter(([l, , n]) => n || state.cols[c.id] === l);
@@ -396,14 +410,18 @@ export async function render(root) {
           }).join("")}
         </tr></thead>
         <tbody role="rowgroup">
-          ${list.length ? "" : `<tr><td colspan="${columns.length + 2}" class="conv-empty-row">Под фильтры колонок не подходит ни один разговор.
+          ${list.length ? "" : `<tr><td colspan="${columns.length + nFixed}" class="conv-empty-row">Под фильтры колонок не подходит ни один диалог.
             <button class="btn btn-sm" type="button" data-reset>Сбросить фильтры</button></td></tr>`}
           ${list.map((r) => {
-            const crit = r.status === "done" && r.final_critical === "true";
+            const crit = critOf(r) === "violation";
             return `
             <tr role="row" class="click ${crit ? "is-crit" : ""}" data-id="${esc(r.id)}" data-href="${esc(cardHref(r))}">
-              <td role="cell" class="id-cell">${conversationCell(r, crit)}</td>
+              <td role="cell" class="id-cell"><a href="${cardHref(r)}" ${r.title?.trim() ? `title="${esc(r.title.trim())}"` : ""}>${esc(r.id)}</a></td>
+              <td role="cell" class="cc-lang-cell"><span class="conv-cell-label">Язык</span><span class="lang" title="${esc(LANG[r.language] || r.language || "")}">${esc(r.language || "—")}</span></td>
+              <td role="cell" class="num"><span class="conv-cell-label">Реплик</span>${fmtNum(r.messages, 0)}</td>
+              <td role="cell" class="cc-status-cell"><span class="conv-cell-label">Статус</span>${statusCell(r)}</td>
               <td role="cell" class="num conv-total"><span class="conv-cell-label">Итог</span>${scoreCell(r)}</td>
+              <td role="cell" class="criterion-col"><span class="conv-cell-label">Грубая ошибка</span>${critCell(r, criteria())}</td>
               ${columns.map((c) => `<td role="cell" class="criterion-col">
                 <span class="conv-cell-label" title="${esc(criterionName(c))}">${c.code ? `${esc(c.code)} · ` : ""}${esc(shortCriterionTitle(c))}</span>
                 ${criterionCell(r, c)}</td>`).join("")}
@@ -424,7 +442,7 @@ export async function render(root) {
   }
 
   function resetFilters() {
-    Object.assign(state, { lang: "", status: "", q: "", band: "", cols: {} });
+    Object.assign(state, { lang: "", status: "", q: "", band: "", crit: "", cols: {} });
     $("#f-q", root).value = "";
     draw();
   }
@@ -490,6 +508,9 @@ export async function render(root) {
     if (!sel) return;
     const key = sel.dataset.col;
     if (key === "band") state.band = sel.value;
+    else if (key === "crit") state.crit = sel.value;
+    else if (key === "lang") { state.lang = sel.value; $("#f-lang", root).value = sel.value; }
+    else if (key === "status") { state.status = sel.value; $("#f-status", root).value = sel.value; }
     else state.cols[key.slice(4)] = sel.value;
     draw();
     $(`#table [data-col="${CSS.escape(key)}"]`, root)?.focus();
@@ -640,20 +661,24 @@ function batchPanel(b, { clName, eta: etaText }) {
     </div>`;
 }
 
-function conversationCell(r, critical) {
-  const title = r.title?.trim();
-  return `<a href="${cardHref(r)}">${esc(title || r.id)}</a>
-    <div class="conv-row-meta">
-      ${title ? `<span>${esc(r.id)}</span>` : ""}
-      <span class="lang" title="${esc(LANG[r.language] || r.language || "")}">${esc(r.language || "—")}</span>
-      <span>${fmtNum(r.messages, 0)} ${plural(Number(r.messages), ["реплика", "реплики", "реплик"])}</span>
-    </div>
-    <div class="conv-row-flags">
-      ${statusBadge(r)}
-      ${critical ? `<span class="badge crit">${icon("alert")}Грубая ошибка</span>` : ""}
-      ${Number(r.open_appeals) ? `<span class="badge warn">Открытые апелляции: ${esc(r.open_appeals)}</span>`
-        : Number(r.appeals) ? `<span class="badge brand">Апелляции: ${esc(r.appeals)}</span>` : ""}
-    </div>`;
+/** Evaluation status and appeals — the «Статус» column. */
+function statusCell(r) {
+  const ap = Number(r.open_appeals) ? `<span class="badge warn">Апелляция: ${esc(r.open_appeals)}</span>`
+    : Number(r.appeals) ? `<span class="badge brand">Апелляций: ${esc(r.appeals)}</span>` : "";
+  return `<div class="cc-badges">${statusBadge(r)}${ap}</div>`;
+}
+
+const critOf = (r) => (r.status !== "done" ? "none" : r.final_critical === "true" ? "violation" : "clean");
+
+/** «Грубая ошибка»: «Нарушение» (red) or a dash; the tooltip names the critical criteria that fired. */
+function critCell(r, all) {
+  const k = critOf(r);
+  if (k === "none") return '<span class="muted" aria-label="Нет оценки">—</span>';
+  if (k === "clean") return '<span class="cc-dash" title="Грубых ошибок нет" aria-label="Грубых ошибок нет">—</span>';
+  const fired = all.filter((c) => c.type === "critical" && criterionScore(r, c)?.answer === "yes");
+  const label = fired.length ? `Грубая ошибка: ${fired.map(criterionName).join(", ")}` : "Грубая ошибка";
+  const href = `${cardHref(r)}${fired[0] ? `&crit=${encodeURIComponent(fired[0].id)}` : ""}`;
+  return `<a class="conv-criterion-score is-no" href="${esc(href)}" title="${esc(label)}" aria-label="${esc(label)}">Нарушение</a>`;
 }
 
 function scoreCell(r) {
@@ -673,6 +698,10 @@ const SHORT_CRITERION_TITLES = new Map([
   ["Эмпатия и клиентоориентированность", "Эмпатия"],
   ["Управление диалогом, скорость и грамотность", "Ведение диалога"],
 ]);
+/** Soft hyphen in long single words, so narrow header cells wrap instead of overlapping. */
+const SOFT = { "Потребность": "Потреб\u00ADность", "Идентификация": "Иденти\u00ADфикация", "Консультация": "Консуль\u00ADтация",
+  "Завершение": "Завер\u00ADшение", "Клиентоориентированность": "Клиенто\u00ADориенти\u00ADрованность" };
+const softWrap = (t) => t.replace(/[А-Яа-яЁёA-Za-z]{11,}/g, (w) => SOFT[w] || w);
 const shortCriterionTitle = (criterion) => SHORT_CRITERION_TITLES.get(criterion.title) || criterion.title;
 const criterionName = (criterion) => criterion.code ? `${criterion.code} · ${criterion.title}` : criterion.title;
 const criterionScore = (row, criterion) => row.criterion_scores?.find((score) => score.criterion_id === criterion.id);
@@ -682,7 +711,7 @@ function criterionResult(criterion, score) {
   if (score?.answer == null) return { kind: "missing", label: "—", detail: "Нет результата" };
   const view = answerView(criterion, score.answer);
   if (view.kind === "na") return { kind: "na", label: "N/A", detail: "Не применимо" };
-  const label = criterion.type === "critical" ? (score.answer === "yes" ? "Да" : "Нет")
+  const label = criterion.type === "critical" ? (score.answer === "yes" ? "Нарушение" : "—")
     : view.kind === "yes" ? "Да" : view.kind === "no" ? "Нет" : "Частично";
   const points = score.points == null || score.max_points == null ? "" : ` · ${fmtNum(score.points)} из ${fmtNum(score.max_points)} балл.`;
   return { kind: view.kind, label, detail: `${view.label}${points}` };

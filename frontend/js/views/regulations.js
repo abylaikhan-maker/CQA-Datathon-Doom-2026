@@ -17,7 +17,7 @@ export async function render(root) {
       <div>
         <h1>Регламенты</h1>
         <p class="sub">Документы компании, с которыми сверяются обещания операторов: сроки, суммы, условия, запреты.
-          Сверка показывается в карточке разговора рядом с репликой и не меняет баллы по чек-листу.</p>
+          Сверка показывается в карточке диалога рядом с репликой и не меняет баллы по чек-листу.</p>
       </div>
     </div>
     <div class="reg-grid">
@@ -34,7 +34,7 @@ export async function render(root) {
       <section class="card reg-run" aria-labelledby="reg-run-h">
         <div class="card-head"><h2 id="reg-run-h">Сверка набора</h2></div>
         <div class="card-pad reg-run-body">
-          <p class="reg-run-text">Сверяет каждый разговор набора со всеми загруженными регламентами. Результат появится в карточках разговоров.</p>
+          <p class="reg-run-text">Сверяет каждый диалог набора со всеми загруженными регламентами. Результат появится в карточках диалогов.</p>
           <div class="reg-run-ctl">
             <label class="reg-sr" for="reg-group">Набор</label>
             <select class="input" id="reg-group">
@@ -186,7 +186,7 @@ function runHtml(run) {
       <span class="cv-reg-count is-match">${icon("check")}Соответствует: <b>${t.matches || 0}</b></span>
     </div>
     <p class="reg-run-meta">Прогон №${run.id} · ${esc(fmtDate(run.finished_at || run.created_at))} · сверено ${r.conversations.length} из ${run.total}${r.failed_ids?.length ? `, не удалось ${r.failed_ids.length}` : ""}</p>
-    ${withConflicts.length ? `<h3 class="reg-h3">Разговоры с расхождениями</h3>
+    ${withConflicts.length ? `<h3 class="reg-h3">Диалоги с расхождениями</h3>
       <ul class="reg-conv-list">${withConflicts.map((c) => `
         <li><a href="#/conversation/${encodeURIComponent(c.conversation_id)}">${esc(c.conversation_id)}</a>
           <span class="cv-reg-count is-conflict">${c.conflicts} ${plural(c.conflicts, ["расхождение", "расхождения", "расхождений"])}</span></li>`).join("")}

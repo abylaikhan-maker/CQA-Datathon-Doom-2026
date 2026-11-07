@@ -168,7 +168,7 @@ async def _conversation(conn, conversation_id: str) -> dict:
         "SELECT id, channel, language, transcript FROM conversations WHERE id=$1", conversation_id,
     )
     if not row:
-        raise HTTPException(404, "Разговор не найден")
+        raise HTTPException(404, "Диалог не найден")
     return db.rec(row)
 
 
@@ -228,7 +228,7 @@ async def _run(run_id: int, conversations: list[dict], regulations: list[dict]) 
             "regulations": _snapshot(regulations),
         }
         if conversations and len(failed) == len(conversations):
-            error = "Gemini не удалось обработать разговоры. Попробуйте запустить сверку ещё раз."
+            error = "Gemini не удалось обработать диалоги. Попробуйте запустить сверку ещё раз."
     except Exception as exc:
         logger.warning("Regulation run %s failed (%s)", run_id, type(exc).__name__)
         error = "Не удалось завершить сверку. Попробуйте запустить её ещё раз."
@@ -255,7 +255,7 @@ async def start_run(body: RunRequest, background: BackgroundTasks):
             body.group,
         )
         if not conversations:
-            raise HTTPException(404, "В этом наборе нет разговоров.")
+            raise HTTPException(404, "В этом наборе нет диалогов.")
         run = await conn.fetchrow(
             """INSERT INTO regulation_runs (dataset_group, total, model) VALUES ($1, $2, $3)
                ON CONFLICT (dataset_group) WHERE status='running' DO NOTHING RETURNING *""",

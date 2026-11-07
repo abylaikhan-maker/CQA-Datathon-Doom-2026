@@ -72,7 +72,7 @@ export async function render(root, params, query = {}) {
   root.innerHTML = `<div class="cl-page">
     <div class="page-head">
       <div><h1>Чек-листы</h1>
-        <div class="sub">Измените критерий, сохраните новую версию и примените её к набору разговоров. Старые оценки остаются привязаны к своей версии.</div></div>
+        <div class="sub">Измените критерий, сохраните новую версию и примените её к набору диалогов. Старые оценки остаются привязаны к своей версии.</div></div>
       <div class="spacer"></div>
       <div class="page-actions"><a class="btn btn-primary" href="#/checklists/new${esc(editorQuery)}" data-nav-guard>${icon("plus")}Новый чек-лист</a></div>
     </div>
@@ -85,7 +85,7 @@ export async function render(root, params, query = {}) {
     </div>` : conversation ? `<div class="qa-handoff">
       <span class="qa-handoff-icon">${icon("chat")}</span>
       <div><b>Новые правила для диалога <span class="mono">${esc(conversation)}</span></b>
-      <div>Сохраните версию, затем вернитесь к разговору и переоцените его.</div></div>
+      <div>Сохраните версию, затем вернитесь к диалогу и переоцените его.</div></div>
       <a class="btn" href="${esc(returnToDialog(current.id || ""))}" id="return-dialog">К диалогу</a>
     </div>` : ""}
     <div class="cl-grid">

@@ -50,12 +50,12 @@ export async function render(root, params, query) {
   const n = conv.transcript.length;
   root.innerHTML = `
     <div class="cv-page">
-    <div class="crumbs"><a href="#/conversations">Разговоры</a> / ${esc(conv.title?.trim() || "Разбор разговора")}</div>
+    <div class="crumbs"><a href="#/conversations">Диалоги</a> / ${esc(conv.title?.trim() || "Разбор диалога")}</div>
     <header class="cv-head">
       <div class="cv-id">
         <span class="cv-id-ic cv-id-chat" aria-hidden="true">${cvIcon("chat")}</span>
         <div class="cv-id-main">
-          <h1 class="cv-id-title"><span class="cv-sr">Разговор </span>${esc(conv.id)}</h1>
+          <h1 class="cv-id-title"><span class="cv-sr">Диалог </span>${esc(conv.id)}</h1>
           <ul class="cv-facts" aria-label="О диалоге">
             ${conv.language ? `<li>${cvIcon("globe")}${esc(LANG[conv.language] || conv.language)}</li>` : ""}
             ${duration ? `<li title="Длительность по меткам времени">${cvIcon("clock")}${fmtClock(duration)}</li>` : ""}
@@ -260,7 +260,7 @@ function updateChecklistControls() {
   ready.hidden = !changed;
   ready.innerHTML = changed ? `<span class="qa-handoff-icon">${icon("refresh")}</span>
     <div><b>Выбрана другая версия чек-листа · v${esc(cl.version)}</b>
-    <div>Нажмите «Переоценить диалог», чтобы применить её к этому разговору.</div></div>
+    <div>Нажмите «Переоценить диалог», чтобы применить её к этому диалогу.</div></div>
     ${canCheckRule ? `<a class="btn btn-sm" href="#/checklists/${kid}/rule-check?${esc(String(ruleCheckQuery))}">Проверить правило</a>` : ""}` : "";
 }
 
@@ -481,7 +481,7 @@ function drawEvaluation(ev) {
       </div>
     </div>
     ${previous ? `<div class="cv-version-compare">
-      <div><b>Оценки модели по двум версиям</b><span>Один и тот же разговор</span></div>
+      <div><b>Оценки модели по двум версиям</b><span>Один и тот же диалог</span></div>
       <div class="cv-version-values"><span><small>v${esc(previous.checklist_version)}</small><strong>${fmtNum(previous.total)}</strong></span>
       ${cvIcon("arrowRight")}<span><small>v${esc(ev.checklist_version)}</small><strong>${fmtNum(ev.total)}</strong></span></div>
     </div>` : ""}
