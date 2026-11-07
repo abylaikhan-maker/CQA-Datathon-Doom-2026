@@ -11,6 +11,7 @@ import * as appeals from "./views/appeals.js";
 import * as analytics from "./views/analytics.js";
 import * as accuracy from "./views/accuracy.js";
 import * as radar from "./views/radar.js";
+import * as regulations from "./views/regulations.js";
 
 const routes = [
   { re: /^\/conversations$/, view: conversations, nav: "conversations", title: "Разговоры", skel: "list" },
@@ -23,6 +24,7 @@ const routes = [
   { re: /^\/accuracy$/, view: accuracy, nav: "accuracy", title: "Точность", skel: "list" },
   { re: /^\/analytics$/, view: analytics, nav: "analytics", title: "Аналитика", skel: "list" },
   { re: /^\/radar$/, view: radar, nav: "radar", title: "Сервис инсайтов", skel: "list" },
+  { re: /^\/regulations$/, view: regulations, nav: "regulations", title: "Регламенты", skel: "list" },
 ];
 
 let cleanup = null;

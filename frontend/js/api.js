@@ -7,7 +7,8 @@ async function req(method, path, body, raw = false) {
   if (body !== undefined) {
     if (raw) {
       opts.body = body;
-      opts.headers["content-type"] = "application/json";
+      // A File is sent as raw bytes (regulation upload); a string is JSON text.
+      opts.headers["content-type"] = body instanceof Blob ? "application/octet-stream" : "application/json";
     } else {
       opts.body = JSON.stringify(body);
       opts.headers["content-type"] = "application/json";
@@ -56,6 +57,15 @@ export const api = {
   radarRuns: (group) => req("GET", "/api/radar/runs" + qs({ group })),
   radarRun: (id) => req("GET", `/api/radar/runs/${id}`),
   startRadar: (group) => req("POST", "/api/radar/runs", { group }),
+  regulations: () => req("GET", "/api/regulations"),
+  regulation: (id) => req("GET", `/api/regulations/${id}`),
+  uploadRegulation: (file, title) => req("POST", "/api/regulations" + qs({ filename: file.name, title }), file, true),
+  deleteRegulation: (id) => req("DELETE", `/api/regulations/${id}`),
+  regulationCheck: (cid) => req("GET", `/api/regulations/checks/${encodeURIComponent(cid)}`),
+  runRegulationCheck: (cid) => req("POST", `/api/regulations/checks/${encodeURIComponent(cid)}`),
+  regulationRuns: (group) => req("GET", "/api/regulations/runs" + qs({ group })),
+  regulationRun: (id) => req("GET", `/api/regulations/runs/${id}`),
+  startRegulationRun: (group) => req("POST", "/api/regulations/runs", { group }),
   radarTasks: () => req("GET", "/api/radar/tasks"),
   radarTask: (id) => req("GET", `/api/radar/tasks/${id}`),
   createRadarTask: (body) => req("POST", "/api/radar/tasks", body),

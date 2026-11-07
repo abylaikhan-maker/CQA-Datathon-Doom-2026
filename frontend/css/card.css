@@ -524,3 +524,51 @@
   .ap-tab { padding: 6px 9px; font-size: 13.5px; gap: 6px; }
   .ap-actions .btn { white-space: normal; text-align: center; width: 100%; }
 }
+
+/* ---- Сверка с регламентом (card/regulation.js) ---- */
+.cv-reg-card { margin-top: 18px; }
+.cv-reg-head h2 { display: flex; align-items: center; gap: 8px; }
+.cv-reg-head h2 svg, .cv-reg-badge svg, .cv-reg-count svg, .cv-reg-note-v svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.cv-reg-sub { margin: 4px 0 0; font-size: 13px; color: var(--ink-3); }
+.cv-reg-body { padding: 4px 20px 20px; display: flex; flex-direction: column; gap: 14px; }
+.cv-reg-card.is-running .cv-reg-list { opacity: .55; }
+.cv-reg-progress { margin: 0; font-size: 13px; color: var(--ink-2); }
+.cv-reg-empty { padding: 14px 16px; border-radius: 10px; background: var(--surface-2); color: var(--ink-2); font-size: 13.5px; }
+.cv-reg-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.cv-reg-count { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-2); }
+.cv-reg-count b { font-variant-numeric: tabular-nums; color: var(--ink); }
+.cv-reg-count.is-conflict { color: var(--bad); }
+.cv-reg-count.is-match { color: var(--good); }
+.cv-reg-count.is-none { color: var(--na); }
+.cv-reg-meta { margin-left: auto; font-size: 12.5px; color: var(--ink-3); }
+.cv-reg-list { display: flex; flex-direction: column; gap: 12px; }
+.cv-reg-item { border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; background: var(--surface); }
+.cv-reg-item.is-conflict { border-color: #e2b9bd; background: #fffafa; }
+.cv-reg-item.is-flash { animation: cv-flash .8s ease-out; }
+.cv-reg-item-h { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.cv-reg-badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 600; }
+.is-conflict > .cv-reg-item-h .cv-reg-badge { background: var(--bad-bg); color: var(--bad); }
+.is-match > .cv-reg-item-h .cv-reg-badge { background: var(--good-bg); color: var(--good); }
+.is-none > .cv-reg-item-h .cv-reg-badge { background: var(--na-bg); color: var(--na); }
+.cv-reg-topic { font-size: 12.5px; color: var(--ink-3); }
+.cv-reg-promise { font-size: 14px; font-weight: 600; color: var(--ink); }
+.cv-reg-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); gap: 10px; }
+.cv-reg-side { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); text-align: left; font: inherit; color: inherit; border: 0; }
+button.cv-reg-side { cursor: pointer; }
+button.cv-reg-side:hover { background: var(--brand-50); }
+.cv-reg-doc { background: var(--brand-50); }
+.is-conflict .cv-reg-doc { background: #fff; box-shadow: inset 0 0 0 1px #e2b9bd; }
+.cv-reg-k { font-size: 12px; color: var(--ink-3); }
+.cv-reg-q { font-size: 14px; line-height: 1.5; color: var(--ink); }
+.cv-reg-src { font-size: 12px; color: var(--ink-3); }
+.cv-reg-issue { font-size: 12px; color: var(--warn); }
+.cv-reg-full summary { font-size: 12.5px; color: var(--brand-700); cursor: pointer; }
+.cv-reg-full p { margin: 6px 0 0; font-size: 13px; color: var(--ink-2); }
+.cv-reg-expl { margin: 0; font-size: 13.5px; color: var(--ink-2); line-height: 1.5; }
+/* Note under an operator message in the transcript */
+.cv-reg-note { display: flex; flex-direction: column; gap: 2px; width: 100%; margin-top: 8px; padding: 7px 10px; border: 0; border-radius: 8px; text-align: left; font: inherit; cursor: pointer; background: var(--na-bg); color: var(--na); }
+.cv-reg-note.is-conflict { background: var(--bad-bg); color: var(--bad); }
+.cv-reg-note.is-match { background: var(--good-bg); color: var(--good); }
+.cv-reg-note-v { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; }
+.cv-reg-note-t { font-size: 12.5px; line-height: 1.45; color: var(--ink-2); }
+.cv-reg-note:hover { filter: brightness(.97); }

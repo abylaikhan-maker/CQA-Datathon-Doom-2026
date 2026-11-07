@@ -143,3 +143,45 @@ CREATE TABLE IF NOT EXISTS ground_truth (
     created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (dataset_group, version)
 );
+
+-- Company regulations (PDF / DOCX / TXT / Markdown) split into clauses, and checks of operator
+-- promises against them. A check never changes the checklist score.
+CREATE TABLE IF NOT EXISTS regulations (
+    id          SERIAL PRIMARY KEY,
+    title       TEXT NOT NULL,
+    filename    TEXT NOT NULL,
+    size_bytes  INT NOT NULL,
+    text        TEXT NOT NULL,
+    clauses     JSONB NOT NULL,          -- [{n, ref, section, text}]
+    author      TEXT,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- The latest check of each conversation.
+CREATE TABLE IF NOT EXISTS regulation_checks (
+    conversation_id TEXT PRIMARY KEY REFERENCES conversations(id) ON DELETE CASCADE,
+    regulations     JSONB NOT NULL,      -- [{id, title}] the check was made against
+    findings        JSONB NOT NULL,      -- [{turn, quote, promise, topic, verdict, clause, clause_quote, explanation}]
+    dropped         INT NOT NULL DEFAULT 0,
+    model           TEXT,
+    usage           JSONB,
+    cost_usd        DOUBLE PRECISION,
+    author          TEXT,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS regulation_runs (
+    id            SERIAL PRIMARY KEY,
+    dataset_group TEXT NOT NULL,
+    status        TEXT NOT NULL DEFAULT 'running',
+    total         INT NOT NULL,
+    done          INT NOT NULL DEFAULT 0,
+    failed        INT NOT NULL DEFAULT 0,
+    model         TEXT NOT NULL,
+    error         TEXT,
+    result        JSONB,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    finished_at   TIMESTAMPTZ
+);
+CREATE UNIQUE INDEX IF NOT EXISTS regulation_one_running_per_group_idx
+    ON regulation_runs (dataset_group) WHERE status = 'running';

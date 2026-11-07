@@ -198,6 +198,7 @@ const ICONS = {
   x: '<path d="M6 6l12 12M18 6 6 18"/>',
   alert: '<path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17.5v.01"/>',
   list: '<path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/>',
+  doc: '<path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h6"/>',
   done: '<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>',
   score: '<path d="M4 19h16M7 16V10M12 16V5M17 16v-4"/>',
   scale: '<path d="M12 3v18M5 7h14M5 7l-3 7h6zM19 7l-3 7h6zM8 21h8"/>',

@@ -43,6 +43,7 @@ open http://localhost:8090  # порт задаётся APP_PORT
 4. **Апелляции**: проверяющий видит спорную оценку, комментарий и фрагмент диалога, подтверждает или меняет оценку с причиной. Итог пересчитывается; в карточке видны исходная оценка, решение и финальный результат.
 5. **Чек-листы**: можно поменять критерий (формулировку, тип, вес, N/A, шкалу), затем **Сохранить новую версию** и **Применить к набору**. Старые оценки остаются привязаны к своей версии.
 6. **Аналитика**: средний итог, разбивка по языкам, распределение баллов, ответы по критериям, стоимость одной оценки, экспорт CSV.
+7. **Регламенты**: загрузите регламент компании (PDF, DOCX, TXT или Markdown; для демо — `samples/demo_regulation.md`). Файл делится на пункты («2.1», «п. 3.4», иначе по абзацам). В карточке разговора **Сверить с регламентом**: модель находит обещания оператора (сроки, суммы, условия, запреты) и ставит рядом пункт регламента с вердиктом «Соответствует», «Расходится» или «Нет в регламенте». Цитаты оператора сверяются с расшифровкой, ключи пунктов — с загруженными файлами. На баллы чек-листа сверка не влияет. **Сверить набор** проверяет все разговоры в фоне.
 
 ## Архитектура
 
@@ -133,4 +134,4 @@ python tools/submit_results.py prod --team "Название команды" --g
 
 ## API (кратко)
 
-`POST /api/datasets/import {group_id}` · `POST /api/datasets/upload` · `GET /api/conversations` · `GET /api/conversations/{id}` · `GET /api/audio/{id}` · `POST|GET /api/ground-truth` · `GET /api/accuracy?group=` · `GET /api/accuracy/{batch}?compare=` · `GET|POST /api/checklists` · `POST /api/evaluations {conversation_id, checklist_id}` · `POST /api/batches {group, checklist_id, only_missing}` · `POST /api/appeals` · `POST /api/appeals/{id}/decision {decision: confirm|change, new_answer, reason}` · `GET /api/stats` · `GET /api/export.csv`
+`POST /api/datasets/import {group_id}` · `POST /api/datasets/upload` · `GET /api/conversations` · `GET /api/conversations/{id}` · `GET /api/audio/{id}` · `POST|GET /api/ground-truth` · `GET /api/accuracy?group=` · `GET /api/accuracy/{batch}?compare=` · `GET|POST /api/checklists` · `POST /api/evaluations {conversation_id, checklist_id}` · `POST /api/batches {group, checklist_id, only_missing}` · `POST /api/appeals` · `POST /api/appeals/{id}/decision {decision: confirm|change, new_answer, reason}` · `GET /api/stats` · `GET /api/export.csv` · `GET|POST /api/regulations?filename=` (тело — файл) · `DELETE /api/regulations/{id}` · `GET|POST /api/regulations/checks/{conversation_id}` · `POST /api/regulations/runs {group}` · `GET /api/regulations/runs/{id}`

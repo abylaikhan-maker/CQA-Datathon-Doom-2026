@@ -5,6 +5,7 @@ import { esc, $, $$, fmtNum, fmtDate, toast, busy, modal, answerView, tsSeconds,
 import { refreshBadge } from "../app.js";
 import { createPlayer, buildSegments, audioTimeline } from "../card/player.js";
 import { msgHtml, scrollInBox } from "../card/transcript.js";
+import { mountRegulation } from "../card/regulation.js";
 import { critHtml, lossesHtml, lossItems, shortReason, metaHtml, loadingHtml, updateLoading, firstRef, plural, isRevised, changeReview } from "../card/score.js";
 
 let ctx = null;
@@ -40,6 +41,7 @@ export async function render(root, params, query) {
   };
   const mine = ctx;
   const cleanup = () => {
+    if (mine.regulation) mine.regulation();
     if (mine.player) mine.player.destroy();
     clearInterval(mine.loadingTimer);
     clearTimeout(mine.pollTimer);
@@ -91,7 +93,8 @@ export async function render(root, params, query) {
         <button type="button" class="cv-follow" id="cv-follow" hidden>↓ К текущей реплике</button>
       </section>
       <section class="card cv-ev-card" id="eval-panel" aria-label="Оценка качества"></section>
-    </div>`;
+    </div>
+    <section class="card cv-reg-card" id="cv-reg" aria-label="Сверка с регламентом"></section>`;
 
   const tr = $("#transcript", root);
   tr.addEventListener("click", (e) => {
@@ -147,6 +150,8 @@ export async function render(root, params, query) {
       onActive: (n, isPlaying) => karaoke(n, isPlaying),
     });
   }
+
+  ctx.regulation = mountRegulation({ root, convId: conv.id, focusMsg: (n, opts) => { if (ctx === mine) focusMsg(n, opts); } });
 
   if (history) await loadEvaluation(history.id);
   else drawEmpty();
