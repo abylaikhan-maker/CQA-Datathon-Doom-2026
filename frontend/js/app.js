@@ -2,7 +2,7 @@
 // that may return a cleanup function. Views only touch `root`, so each one can
 // be mounted on its own (e.g. a single Dynamics 365 form tab).
 import { api } from "./api.js";
-import { esc, $$ } from "./util.js";
+import { esc, $$, icon } from "./util.js";
 import * as conversations from "./views/conversations.js";
 import * as card from "./views/card.js";
 import * as checklists from "./views/checklists.js";
@@ -10,8 +10,8 @@ import * as ruleCheck from "./views/rule-check.js";
 import * as appeals from "./views/appeals.js";
 import * as analytics from "./views/analytics.js";
 import * as accuracy from "./views/accuracy.js";
-import * as radar from "./views/radar.js";
 import * as regulations from "./views/regulations.js";
+import * as verify from "./views/verify.js";
 
 const routes = [
   { re: /^\/conversations$/, view: conversations, nav: "conversations", title: "Разговоры", skel: "list" },
@@ -23,8 +23,9 @@ const routes = [
   { re: /^\/appeals\/(\d+)$/, view: appeals, nav: "appeals", keys: ["id"], title: "Апелляции", skel: "split" },
   { re: /^\/accuracy$/, view: accuracy, nav: "accuracy", title: "Точность", skel: "list" },
   { re: /^\/analytics$/, view: analytics, nav: "analytics", title: "Аналитика", skel: "list" },
-  { re: /^\/radar$/, view: radar, nav: "radar", title: "Сервис инсайтов", skel: "list" },
   { re: /^\/regulations$/, view: regulations, nav: "regulations", title: "Регламенты", skel: "list" },
+  { re: /^\/verify$/, view: verify, nav: "accuracy", title: "Проверка эталона", skel: "split" },
+  { re: /^\/verify\/(.+)$/, view: verify, nav: "accuracy", keys: ["id"], title: "Проверка эталона", skel: "split" },
 ];
 
 let cleanup = null;
@@ -65,16 +66,22 @@ async function route() {
   if (path === lastPath && m.r.view.onQuery) { m.r.view.onQuery(query); return; }
   lastPath = path;
 
+  // Errors belong to the screen that caused them: don't carry them over.
+  document.querySelectorAll("#toasts .toast.err").forEach((t) => t.remove());
   if (typeof cleanup === "function") cleanup();
   cleanup = null;
   const token = ++seq;
-  $$(".site-nav [data-nav]").forEach((a) => {
+  $$(".sidebar nav a[data-nav]").forEach((a) => {
     const on = a.dataset.nav === m.r.nav;
     a.classList.toggle("active", on);
     if (on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
   });
-  document.getElementById("reports-menu").classList.toggle("active", ["analytics", "accuracy"].includes(m.r.nav));
   document.title = `${m.r.title} · CQA`;
+  // Progress of the first-run guide on «Диалоги» (steps that have no server-side trace).
+  try {
+    if (m.r.view === card) localStorage.setItem("cqa.seen.card", "1");
+    if (m.r.view === accuracy) localStorage.setItem("cqa.seen.accuracy", "1");
+  } catch { /* ignore */ }
   const params = {};
   (m.r.keys || []).forEach((k, i) => (params[k] = decodeURIComponent(m.m[i + 1])));
 
@@ -130,10 +137,13 @@ async function loadMeta() {
     const email = me.email || "";
     document.getElementById("meta-info").innerHTML =
       (email ? `
-        <div class="site-account"><b>${esc(email)}</b><a href="/oauth2/sign_out?rd=%2F">Выйти</a></div>` : "") +
-      `<div>Модель <b>${esc(m.model)}</b></div>` +
-      (m.provider === "mock" ? `<div class="site-demo-note">Демо-режим · оценки по эвристикам</div>` : "");
-    document.getElementById("workspace-menu").classList.toggle("is-demo", m.provider === "mock");
+        <div class="user">
+          <span class="ava" title="${esc(email)}" aria-hidden="true">${esc(email.slice(0, 1))}</span>
+          <span class="who"><span class="email" title="${esc(email)}">${esc(email)}</span><a href="/oauth2/sign_out?rd=%2F">Выйти</a></span>
+          <a class="foot-ic logout-ic" href="/oauth2/sign_out?rd=%2F" title="Выйти (${esc(email)})" aria-label="Выйти из аккаунта ${esc(email)}">${icon("logout")}</a>
+        </div>` : "") +
+      `<div class="model" title="Модель: ${esc(m.model)}"><span class="dot" aria-hidden="true"></span><span class="model-t">Модель: <b>${esc(m.model)}</b></span></div>` +
+      (m.provider === "mock" ? `<div class="mock" title="Демо-режим: ключ LLM не задан, оценки — простые эвристики">${icon("alert")}<span class="mock-t">Демо-режим · оценки по эвристикам</span></div>` : "");
   } catch { /* ignore */ }
 }
 
@@ -150,15 +160,5 @@ document.getElementById("skip-link")?.addEventListener("click", (e) => {
 });
 
 window.addEventListener("hashchange", route);
-for (const menu of $$(".site-menu")) {
-  menu.addEventListener("click", (e) => { if (e.target.closest("a")) menu.open = false; });
-  document.addEventListener("click", (e) => { if (!menu.contains(e.target)) menu.open = false; });
-  menu.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && menu.open) {
-      menu.open = false;
-      menu.querySelector("summary").focus();
-    }
-  });
-}
 loadMeta();
 route();

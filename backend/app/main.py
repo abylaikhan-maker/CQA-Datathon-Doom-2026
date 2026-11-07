@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, StringConstraints
 
-from . import accuracy, audio, config, dataset, db, evaluator, radar, regulations, rule_checks, scoring, version
+from . import accuracy, audio, config, dataset, db, evaluator, regulations, rule_checks, scoring, version
 
 _bg: set[asyncio.Task] = set()
 
@@ -33,10 +33,6 @@ async def lifespan(_: FastAPI):
                            "WHERE status IN ('pending','running')")
         await conn.execute("UPDATE batches SET status='finished', finished_at=now() WHERE status='running'")
         await conn.execute(
-            """UPDATE radar_runs SET status='error', error='Анализ прерван перезапуском сервиса.',
-                      finished_at=now() WHERE status='running'"""
-        )
-        await conn.execute(
             """UPDATE regulation_runs SET status='error', error='Сверка прервана перезапуском сервиса.',
                       finished_at=now() WHERE status='running'"""
         )
@@ -46,7 +42,6 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="CQA — Conversation Quality Analytics", lifespan=lifespan)
 app.include_router(rule_checks.router)
-app.include_router(radar.router)
 app.include_router(regulations.router)
 
 
@@ -580,6 +575,17 @@ async def list_ground_truth():
                       (SELECT count(*) FROM jsonb_object_keys(labels)) AS labels
                FROM ground_truth ORDER BY dataset_group, version DESC""")
     return db.recs(rows)
+
+
+@app.get("/api/ground-truth/{gt_id}")
+async def get_ground_truth(gt_id: int):
+    """One ground-truth version with its labels (used by the manual verification screen)."""
+    async with db.pool.acquire() as conn:
+        r = await conn.fetchrow(
+            "SELECT id, dataset_group, version, labels, meta, note, author, created_at FROM ground_truth WHERE id=$1", gt_id)
+    if not r:
+        not_found("Эталон")
+    return db.rec(r)
 
 
 async def _gt(conn, group: str, gt_id: int | None):

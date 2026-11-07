@@ -100,7 +100,7 @@ export async function render(root) {
     }
   });
 
-  // Dataset run with progress, like the complaint radar.
+  // Dataset run with progress.
   const status = $("#reg-run-status", root);
   const drawRun = () => { status.innerHTML = runHtml(state.run); $("#reg-start", root).disabled = !state.docs.length || !state.group || state.run?.status === "running"; };
   const poll = async () => {

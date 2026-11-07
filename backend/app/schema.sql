@@ -100,36 +100,6 @@ ALTER TABLE batches ADD COLUMN IF NOT EXISTS pipeline JSONB;
 ALTER TABLE evaluations ADD COLUMN IF NOT EXISTS pipeline JSONB;
 CREATE INDEX IF NOT EXISTS evaluations_batch_idx ON evaluations (batch_id);
 
-CREATE TABLE IF NOT EXISTS radar_runs (
-    id            SERIAL PRIMARY KEY,
-    dataset_group TEXT NOT NULL,
-    status        TEXT NOT NULL DEFAULT 'running',
-    total         INT NOT NULL,
-    done          INT NOT NULL DEFAULT 0,
-    failed        INT NOT NULL DEFAULT 0,
-    model         TEXT NOT NULL,
-    error         TEXT,
-    result        JSONB,
-    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
-    finished_at   TIMESTAMPTZ
-);
-CREATE UNIQUE INDEX IF NOT EXISTS radar_one_running_per_group_idx
-    ON radar_runs (dataset_group) WHERE status = 'running';
-
-CREATE TABLE IF NOT EXISTS radar_tasks (
-    id             SERIAL PRIMARY KEY,
-    run_id         INT NOT NULL REFERENCES radar_runs(id),
-    group_index    INT NOT NULL CHECK (group_index >= 0),
-    title          TEXT NOT NULL,
-    category       TEXT NOT NULL,
-    affected_count INT NOT NULL CHECK (affected_count >= 2),
-    report         TEXT NOT NULL,
-    status         TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new', 'in_progress', 'fixed')),
-    created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
-    UNIQUE (run_id, group_index)
-);
-
 -- Hand-labelled reference answers per dataset group. Every upload is a new immutable version.
 -- Used only to measure accuracy; never sent to the model.
 CREATE TABLE IF NOT EXISTS ground_truth (

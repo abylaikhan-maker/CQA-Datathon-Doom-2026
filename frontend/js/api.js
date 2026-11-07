@@ -48,15 +48,13 @@ export const api = {
   conversation: (id) => req("GET", `/api/conversations/${encodeURIComponent(id)}`),
   audioUrl: (id) => `${base()}/api/audio/${encodeURIComponent(id)}`,
   groundTruth: () => req("GET", "/api/ground-truth"),
+  groundTruthGet: (id) => req("GET", `/api/ground-truth/${encodeURIComponent(id)}`),
   uploadGroundTruth: (group, text, note) =>
     req("POST", `/api/ground-truth?${new URLSearchParams({ group, ...(note ? { note } : {}) })}`, text, true),
   accuracy: (group, gtId) => req("GET", `/api/accuracy?${new URLSearchParams({ group, ...(gtId ? { gt_id: gtId } : {}) })}`),
   accuracyRun: (id, { gtId, compare } = {}) =>
     req("GET", `/api/accuracy/${id}?${new URLSearchParams({ ...(gtId ? { gt_id: gtId } : {}), ...(compare ? { compare } : {}) })}`),
   updateBatchNote: (id, note) => req("PATCH", `/api/batches/${id}`, { note }),
-  radarRuns: (group) => req("GET", "/api/radar/runs" + qs({ group })),
-  radarRun: (id) => req("GET", `/api/radar/runs/${id}`),
-  startRadar: (group) => req("POST", "/api/radar/runs", { group }),
   regulations: () => req("GET", "/api/regulations"),
   regulation: (id) => req("GET", `/api/regulations/${id}`),
   uploadRegulation: (file, title) => req("POST", "/api/regulations" + qs({ filename: file.name, title }), file, true),
@@ -66,10 +64,6 @@ export const api = {
   regulationRuns: (group) => req("GET", "/api/regulations/runs" + qs({ group })),
   regulationRun: (id) => req("GET", `/api/regulations/runs/${id}`),
   startRegulationRun: (group) => req("POST", "/api/regulations/runs", { group }),
-  radarTasks: () => req("GET", "/api/radar/tasks"),
-  radarTask: (id) => req("GET", `/api/radar/tasks/${id}`),
-  createRadarTask: (body) => req("POST", "/api/radar/tasks", body),
-  setRadarTaskStatus: (id, status) => req("PATCH", `/api/radar/tasks/${id}`, { status }),
 
   checklists: () => req("GET", "/api/checklists"),
   checklist: (id) => req("GET", `/api/checklists/${id}`),

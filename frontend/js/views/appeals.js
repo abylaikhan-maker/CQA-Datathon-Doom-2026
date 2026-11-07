@@ -3,7 +3,8 @@ import { api } from "../api.js";
 import { esc, $, $$, fmtNum, fmtDate, toast, busy, answerView, answerOptions, LANG, CHANNEL } from "../util.js";
 import { refreshBadge } from "../app.js";
 import { msgHtml } from "../card/transcript.js";
-import { iconFor, plural } from "../card/score.js";
+import { icHtml, plural } from "../card/score.js";
+import { cvIcon } from "../card/icons.js";
 
 let tab = "open";
 let caseCategory = "";
@@ -26,8 +27,9 @@ export async function render(root, params, query = {}) {
     const showCases = tab === "cases";
     const list = showCases && caseCategory ? lists.cases.filter((a) => a.case_details.category === caseCategory) : lists[tab];
     root.innerHTML = `
+      <div class="cv-page ap-page">
       <div class="page-head">
-        <div><h1>Апелляции</h1><div class="sub">Оспоренные оценки: проверяющий изучает доказательства и подтверждает или меняет ответ — итог пересчитывается.</div></div>
+        <div><h1>Апелляции</h1><div class="sub">Оспоренные оценки. Проверяющий изучает доказательства, подтверждает или меняет ответ, и итог диалога пересчитывается.</div></div>
       </div>
       <div class="card">
         <div class="card-head">
@@ -47,11 +49,12 @@ export async function render(root, params, query = {}) {
               <div class="ap-row ap-row-head" aria-hidden="true"><span>Статус</span><span>Критерий и диалог</span><span>${showCases ? "Кейс" : "Комментарий"}</span><span>Оценка / итог</span><span class="ap-date">${showCases ? "Дата" : tab === "open" ? "Подана" : "Рассмотрена"}</span></div>
               ${list.map((a) => rowHtml(a, showCases)).join("")}
             </div>`
-          : showCases ? `<div class="ap-empty"><b>Кейсов в этой категории пока нет</b>
+          : showCases ? `<div class="ap-empty"><span class="ap-empty-ic" aria-hidden="true">${cvIcon("scale")}</span><b>Кейсов в этой категории пока нет</b>
               <span>Сохраните кейс в карточке апелляции, чтобы он появился здесь.</span></div>`
-          : `<div class="ap-empty"><b>${tab === "open" ? "Нет апелляций на рассмотрении" : "Пока нет рассмотренных апелляций"}</b>
-              <span>${tab === "open" ? "Оспорить оценку можно в карточке диалога — кнопка «Оспорить оценку» у критерия." : "Решения проверяющих появятся здесь."}</span></div>`}
+          : `<div class="ap-empty"><span class="ap-empty-ic" aria-hidden="true">${cvIcon("scale")}</span><b>${tab === "open" ? "Нет апелляций на рассмотрении" : "Пока нет рассмотренных апелляций"}</b>
+              <span>${tab === "open" ? "Оспорить оценку можно в разборе разговора: откройте критерий и нажмите «Оспорить оценку»." : "Решения проверяющих появятся здесь."}</span></div>`}
         </div>
+      </div>
       </div>`;
     $$("[data-tab]", root).forEach((b) => b.addEventListener("click", () => { tab = b.dataset.tab; draw(); $(`[data-tab="${tab}"]`, root)?.focus(); }));
     $("#case-filter", root)?.addEventListener("change", (e) => {
@@ -77,9 +80,9 @@ const tabBtn = (key, label, n) =>
 const rawAnswer = (a) => (a === "yes" ? "Да" : a === "no" ? "Нет" : a === "na" ? "N/A" : a === null || a === undefined ? "—" : fmtNum(a));
 
 const statusHtml = (s) =>
-  s === "open" ? `<span class="ap-status is-open">на рассмотрении</span>`
-  : s === "changed" ? `<span class="ap-status is-changed">оценка изменена</span>`
-  : `<span class="ap-status is-confirmed">оценка подтверждена</span>`;
+  s === "open" ? `<span class="ap-status is-open">${cvIcon("hourglass")}на рассмотрении</span>`
+  : s === "changed" ? `<span class="ap-status is-changed">${cvIcon("edit")}оценка изменена</span>`
+  : `<span class="ap-status is-confirmed">${cvIcon("shield")}оценка подтверждена</span>`;
 
 function deltaHtml(before, after) {
   if (before === null || before === undefined || after === null || after === undefined) return "";
@@ -105,9 +108,9 @@ function rowHtml(a, showCase) {
       </div>
       <div class="ap-ba">
         <div class="ap-ba-line"><span class="ap-ba-k">Ответ</span>
-          ${changed ? `<span class="ap-was is-struck">${esc(rawAnswer(a.original_answer))}</span>→<b>${esc(rawAnswer(a.new_answer))}</b>` : `<b>${esc(rawAnswer(a.original_answer))}</b>`}</div>
+          ${changed ? `<span class="ap-was is-struck">${esc(rawAnswer(a.original_answer))}</span>${cvIcon("arrowRight", { cls: "ap-arr" })}<b>${esc(rawAnswer(a.new_answer))}</b>` : `<b>${esc(rawAnswer(a.original_answer))}</b>`}</div>
         <div class="ap-ba-line"><span class="ap-ba-k">Итог</span>
-          ${resolved ? `<span class="ap-was">${fmtNum(a.total_before)}</span>→<b>${fmtNum(a.total_after)}</b>${deltaHtml(a.total_before, a.total_after)}` : `<b>${fmtNum(a.total_before)}</b>`}</div>
+          ${resolved ? `<span class="ap-was">${fmtNum(a.total_before)}</span>${cvIcon("arrowRight", { cls: "ap-arr" })}<b>${fmtNum(a.total_after)}</b>${deltaHtml(a.total_before, a.total_after)}` : `<b>${fmtNum(a.total_before)}</b>`}</div>
         ${a.criterion_type === "critical" && changed ? `<div class="ap-ba-line"><span class="ap-ba-k">Флаг</span>
           <b>${a.new_answer === "yes" ? "грубая ошибка выставлена" : "грубая ошибка снята"}</b></div>` : ""}
       </div>
@@ -158,7 +161,6 @@ async function renderDetail(root, id) {
   if (lastShown < msgs.length) fragment += gap(msgs.length - lastShown);
 
   const disputed = a.original_answer;
-  const dv = iconFor(crit, disputed);
   const ptsNow = pointsFor(crit, disputed, srowFinal);
   const maxNow = srowFinal && srowFinal.max_points !== null ? srowFinal.max_points : crit.type === "critical" ? null : crit.weight;
   const chan = CHANNEL[conv.channel] || conv.channel || "";
@@ -174,6 +176,7 @@ async function renderDetail(root, id) {
   const curPts = pointsFor(crit, curRow.answer, srowFinal);
 
   root.innerHTML = `
+    <div class="cv-page ap-page">
     <div class="crumbs"><a href="#/appeals">Апелляции</a> / #${a.id}</div>
     <div class="page-head ap-head">
       <div>
@@ -183,17 +186,18 @@ async function renderDetail(root, id) {
           <a class="mono" href="${cardLink(row.evidence?.[0])}">${esc(conv.id)}</a>
           ${chan ? `<span>${esc(chan)}</span>` : ""}
           ${conv.language ? `<span>${esc(LANG[conv.language] || conv.language)}</span>` : ""}
-          <span>оценка #${ev.id} · ${esc(ev.checklist_name)} v${ev.checklist_version}</span>
+          <span>оценка #${ev.id}</span>
+          <span>v${ev.checklist_version}, ${esc(ev.checklist_name)}</span>
         </div>
       </div>
       <div class="spacer"></div>
-      <a class="btn" href="${cardLink(row.evidence?.[0])}">Открыть карточку диалога →</a>
+      <a class="btn" href="${cardLink(row.evidence?.[0])}">${cvIcon("chat")}Открыть разбор</a>
     </div>
     <div class="ap-grid">
       <div class="ap-col">
         <section class="card ap-crit-card" aria-label="Спорный критерий">
           <div class="ap-crit-title">
-            <span class="cv-ic cv-k-${dv.kind}" aria-hidden="true">${esc(dv.icon)}</span>
+            ${icHtml(crit, disputed)}
             <div><h2>${crit.code ? `<span class="cv-code">${esc(crit.code)}</span>` : ""}${esc(crit.title)}</h2>
               ${crit.description ? `<p class="ap-crit-desc">${esc(crit.description)}</p>` : ""}</div>
           </div>
@@ -221,10 +225,10 @@ async function renderDetail(root, id) {
       </div>
       <div class="ap-col">
         <section class="card" aria-label="Апелляция">
-          <ol class="ap-timeline">
-            <li class="is-done"><span class="ap-tl-dot" aria-hidden="true">✓</span><span class="ap-tl-text"><b>Подана</b><span>${esc(fmtDate(a.created_at))}${a.author ? ` · ${esc(a.author)}` : ""}</span></span></li>
-            <li class="${isOpen ? "is-now" : "is-done"}"><span class="ap-tl-dot" aria-hidden="true">${isOpen ? "" : "✓"}</span><span class="ap-tl-text"><b>${isOpen ? "На рассмотрении" : "Рассмотрена"}</b><span>${isOpen ? "ожидает решения" : `${esc(fmtDate(a.resolved_at))}${a.reviewer ? ` · ${esc(a.reviewer)}` : ""}`}</span></span></li>
-            <li class="${isOpen ? "" : "is-done"}"><span class="ap-tl-dot" aria-hidden="true">${isOpen ? "" : "✓"}</span><span class="ap-tl-text"><b>Итог пересчитан</b><span>${isOpen ? "после решения" : `${fmtNum(a.total_before)} → ${fmtNum(a.total_after)}`}</span></span></li>
+          <ol class="ap-timeline" aria-label="Ход апелляции">
+            <li class="is-done"><span class="ap-tl-dot" aria-hidden="true">${cvIcon("check")}</span><span class="ap-tl-text"><b>Подана</b><span>${esc(fmtDate(a.created_at))}${a.author ? ` · ${esc(a.author)}` : ""}</span></span></li>
+            <li class="${isOpen ? "is-now" : "is-done"}" ${isOpen ? 'aria-current="step"' : ""}><span class="ap-tl-dot" aria-hidden="true">${isOpen ? "" : cvIcon("check")}</span><span class="ap-tl-text"><b>${isOpen ? "На рассмотрении" : "Рассмотрена"}</b><span>${isOpen ? "ожидает решения проверяющего" : `${esc(fmtDate(a.resolved_at))}${a.reviewer ? ` · ${esc(a.reviewer)}` : ""}`}</span></span></li>
+            <li class="${isOpen ? "" : "is-done"}"><span class="ap-tl-dot" aria-hidden="true">${isOpen ? "" : cvIcon("check")}</span><span class="ap-tl-text"><b>Итог пересчитан</b><span>${isOpen ? "после решения" : `${fmtNum(a.total_before)} → ${fmtNum(a.total_after)}`}</span></span></li>
           </ol>
           <div class="cv-pad">
             <div class="ap-sec-h" style="margin-top:0">Комментарий апелляции</div>
@@ -255,7 +259,7 @@ async function renderDetail(root, id) {
             <label class="field">Проверяющий
               <input class="input" id="reviewer" placeholder="ФИО или e-mail" value="${esc(window.CQA_USER || "")}" ${window.CQA_USER ? "readonly" : ""}></label>
             <div class="ap-actions">
-              <button class="btn btn-primary" id="btn-decide" type="button">Сохранить решение</button>
+              <button class="btn btn-primary" id="btn-decide" type="button">${cvIcon("check")}Сохранить решение</button>
             </div>
           </div>
         </section>` : resultHtml({ a, ev, crit, srowOrig, cardLink, versions })}
@@ -278,6 +282,7 @@ async function renderDetail(root, id) {
           </form>
         </section>
       </div>
+    </div>
     </div>`;
 
   $("#ap-case-form", root).addEventListener("submit", async (e) => {
@@ -375,13 +380,13 @@ function resultHtml({ a, ev, crit, srowOrig, cardLink, versions }) {
       <div class="ap-result-h"><h3>Решение проверяющего</h3>${statusHtml(a.status)}</div>
       <div class="ap-totals">
         <div class="ap-total is-before"><small>До решения</small><b>${fmtNum(a.total_before)}</b></div>
-        <div class="ap-totals-arrow" aria-hidden="true">→${deltaHtml(a.total_before, a.total_after)}</div>
+        <div class="ap-totals-arrow">${cvIcon("arrowRight")}${deltaHtml(a.total_before, a.total_after)}</div>
         <div class="ap-total is-after"><small>После решения</small><b>${fmtNum(a.total_after)}</b></div>
       </div>
       <dl class="ap-decision">
         <dt>Решение</dt>
         <dd>${changed
-          ? `<span class="ap-change">Оценка изменена: <span class="cv-pill is-na" style="text-decoration:line-through">${esc(from.label)}</span>→<span class="cv-pill is-ok">${esc(to.label)}</span></span>`
+          ? `<span class="ap-change">Оценка изменена: <s class="cv-pill is-na">${esc(from.label)}</s>${cvIcon("arrowRight", { cls: "ap-arr" })}<span class="cv-pill is-ok">${esc(to.label)}</span></span>`
           : `Оценка подтверждена: <b>${esc(from.label)}</b>`}</dd>
         <dt>Причина</dt><dd>${esc(a.reason || "—")}</dd>
         <dt>Проверяющий</dt><dd>${esc(a.reviewer || "—")} · ${esc(fmtDate(a.resolved_at))}</dd>
@@ -394,7 +399,7 @@ function resultHtml({ a, ev, crit, srowOrig, cardLink, versions }) {
       <div class="ap-actions" style="margin-top:14px">
         <button class="btn" id="btn-rule-example" type="button">Сохранить как контрольный пример</button>
         <a class="btn" href="#/checklists?appeal=${a.id}">Уточнить правило</a>
-        <a class="btn btn-primary" href="${cardLink()}">К финальному результату →</a>
+        <a class="btn btn-primary" href="${cardLink()}">${cvIcon("chat")}Открыть разбор с итогом</a>
       </div>
       <div class="muted small" id="ap-rule-example-status" role="status"></div>
     </section>`;

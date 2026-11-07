@@ -17,6 +17,7 @@ const state = {
   sort: { key: "id", dir: 1 },
 };
 let activePoll = null;
+const seen = (k) => store.get(`cqa.seen.${k}`) === "1";
 
 const LANG_ORDER = ["RU", "KZ", "EN"];
 const STATUS = [
@@ -27,6 +28,7 @@ const STATUS = [
   { v: "appeal", label: "С апелляцией", test: (r) => Number(r.appeals) > 0 },
   { v: "error", label: "Ошибки оценки", test: (r) => r.status === "error" },
 ];
+const isNew = (r) => !r.eval_id || r.status === "error";
 const chanIcon = (c) => icon(c === "voice call" ? "phone" : "chat");
 const chanLabel = (c) => CHANNEL[c] || c || "—";
 const SORT_OPTIONS = [
@@ -48,20 +50,24 @@ export async function render(root) {
     return c ? `${c.name} · v${c.version}` : `#${id}`;
   };
 
+  const hasAny = groups.some((g) => Number(g.count) > 0);
   root.innerHTML = `<div class="conv-page">
     <header class="page-head">
       <div>
         <h1>Разговоры</h1>
-        <div class="sub">Звонки и чаты службы поддержки, оценки и основания для проверки.</div>
+        <div class="sub">Звонки и чаты службы поддержки: загрузите набор, выберите версию чек-листа и запустите оценку. Строка открывает разбор с объяснениями.</div>
       </div>
+      <div class="spacer"></div>
       <div class="page-actions">
+        <button class="btn btn-ghost" type="button" id="btn-guide" hidden>${icon("info")}С чего начать</button>
         <button class="btn" type="button" id="btn-upload">${icon("upload")}Загрузить файл</button>
-        <button class="btn btn-primary" type="button" id="btn-import">${icon("cloud")}Импортировать из API</button>
+        <button class="btn ${hasAny ? "" : "btn-primary"}" type="button" id="btn-import">${icon("cloud")}Импорт из API</button>
       </div>
     </header>
+    <div id="guide"></div>
     <div id="batch"></div>
     <div class="kpis" id="kpis"></div>
-    <section class="card" aria-label="Список разговоров">
+    <section class="card conv-card" aria-label="Список разговоров">
       <div class="card-head">
         <h2>Журнал разговоров</h2>
         <label class="conv-sort"><span>Сортировка</span>
@@ -71,7 +77,8 @@ export async function render(root) {
         </label>
       </div>
       <div class="conv-tools">
-        <label class="field">Набор
+        <button class="btn filters-toggle" type="button" id="btn-filters" aria-expanded="false" aria-controls="filters">${icon("filter")}Фильтры<span class="n" id="filters-n" hidden></span></button>
+        <label class="field f-group">Набор
           <select class="input" id="f-group">
             <option value="">Все наборы</option>
             ${groups.map((g) => `<option value="${esc(g.id)}" ${g.id === state.group ? "selected" : ""}>${esc(g.id)} (${g.count})</option>`).join("")}
@@ -83,7 +90,7 @@ export async function render(root) {
             ${checklists.map((c) => `<option value="${c.id}" ${c.id === state.checklistId ? "selected" : ""}>${esc(c.name)} · v${c.version}${c.is_active ? " (активный)" : ""}</option>`).join("")}
           </select></label>
         <div class="actions">
-          <button class="btn btn-primary" type="button" id="btn-batch" title="Оценить диалоги без оценки выбранным чек-листом">${icon("play")}Оценить новые</button>
+          <button class="btn btn-primary" type="button" id="btn-batch" title="Оценить диалоги без оценки выбранным чек-листом">${icon("play")}Оценить новые<span class="n" id="batch-n" hidden></span></button>
           <button class="btn" type="button" id="btn-rebatch" title="Заново оценить все диалоги выбранным чек-листом">${icon("refresh")}Переоценить все</button>
         </div>
       </div>
@@ -160,15 +167,135 @@ export async function render(root) {
   function draw() {
     const list = sorted(filtered());
     $("#f-sort", root).value = `${state.sort.key}:${state.sort.dir}`;
+    drawGuide();
     drawKpis(list);
     drawFilters();
     drawTable(list);
+    const nNew = (filtersActive() ? filtered() : rows).filter(isNew).length;
+    const bn = $("#batch-n", root);
+    bn.hidden = !nNew;
+    bn.textContent = nNew;
+    $("#btn-batch", root).title = nNew ? `Оценить ${nNew} ${plural(nNew, ["диалог", "диалога", "диалогов"])} без оценки выбранным чек-листом` : "Все диалоги уже оценены этим чек-листом";
+    const nf = [state.group, state.lang, state.channel, state.status].filter(Boolean).length;
+    const nEl = $("#filters-n", root);
+    nEl.hidden = !nf;
+    nEl.textContent = nf;
     const foot = $("#foot", root);
     foot.innerHTML = rows.length ? `
       <span>Показано <b>${list.length}</b> из ${rows.length}</span>
       <span>Чек-лист: ${esc(clName(state.checklistId))}</span>
       ${filtersActive() || state.criterion ? `<button class="btn-link" type="button" data-reset>Сбросить фильтры</button>` : ""}` : "";
     foot.hidden = !rows.length;
+  }
+
+  // ---- «С чего начать»: the demo path with live state, until most dialogs are evaluated.
+  let sampleCrit = { id: null, crit: undefined }; // first criterion that lost points in the example dialog
+  function guideSteps() {
+    const total = groups.reduce((s, g) => s + Number(g.count || 0), 0) || rows.length;
+    const done = rows.filter((r) => r.status === "done");
+    // Example dialog: the lowest evaluated score has the most deductions to explain.
+    const sample = [...done].sort((a, b) => Number(a.final_total) - Number(b.final_total) || a.id.localeCompare(b.id))
+      .find((r) => Number(r.final_total) > 0) || done[0];
+    const appeals = rows.reduce((s, r) => s + Number(r.appeals || 0), 0);
+    const decided = rows.reduce((s, r) => s + Math.max(0, Number(r.appeals || 0) - Number(r.open_appeals || 0)), 0);
+    const open = rows.reduce((s, r) => s + Number(r.open_appeals || 0), 0);
+    const nNew = rows.filter(isNew).length;
+    const card = sample ? cardHref(sample) : null;
+    if (sample && sampleCrit.id !== sample.eval_id) loadSampleCrit(sample);
+    const critHref = card && sampleCrit.id === sample?.eval_id && sampleCrit.crit
+      ? `${card}${card.includes("?") ? "&" : "?"}crit=${encodeURIComponent(sampleCrit.crit)}` : card;
+    const steps = [
+      { ok: total > 0, t: "Загрузите диалоги", d: "Из API организаторов или файлом JSON", act: { btn: "import", label: "Импорт из API" } },
+      { ok: done.length > 0, t: "Запустите оценку", d: "Модель проверит каждый диалог по чек-листу", act: { btn: "eval", label: nNew ? `Оценить новые (${nNew})` : "Оценить новые" }, need: total > 0 },
+      { ok: seen("card"), t: "Откройте разбор", d: "Баллы, объяснения и реплики-доказательства", act: { href: card, label: "Открыть разбор" } },
+      { ok: appeals > 0, t: "Оспорьте оценку", d: "«Оспорить оценку» у критерия в разборе", act: { href: critHref, label: "К критериям" } },
+      { ok: decided > 0, t: "Примите решение", d: "Проверяющий подтверждает или меняет ответ", act: { href: "#/appeals", label: open ? `Открытых: ${open}` : "К апелляциям" } },
+      { ok: seen("accuracy"), t: "Сверьте с эталоном", d: "Насколько ответы модели совпадают с разметкой", act: { href: "#/accuracy", label: "Точность" } },
+    ];
+    // An appeal or a decision is only possible from the dialog review, so it counts as opened.
+    if (steps[3].ok || steps[4].ok) steps[2].ok = true;
+    return steps;
+  }
+
+  async function loadSampleCrit(sample) {
+    sampleCrit = { id: sample.eval_id, crit: undefined };
+    try {
+      const ev = await api.evaluation(sample.eval_id);
+      const list = ev.final_score?.criteria || ev.score?.criteria || [];
+      const lost = list.find((c) => c.points !== null && c.max_points !== null && Number(c.points) < Number(c.max_points));
+      if (sampleCrit.id !== sample.eval_id) return;
+      sampleCrit.crit = lost ? lost.criterion_id : null;
+      if (root.isConnected && $(".guide", root)) drawGuide();
+    } catch { /* keep the plain link */ }
+  }
+
+  const phone = () => window.matchMedia("(max-width: 760px)").matches;
+
+  function drawGuide() {
+    const box = $("#guide", root), reopen = $("#btn-guide", root);
+    const steps = guideSteps();
+    const nDone = steps.filter((s) => s.ok).length;
+    const evaluated = rows.filter((r) => r.status === "done").length;
+    const little = !rows.length || evaluated < rows.length * 0.5;
+    const relevant = little || nDone < steps.length;
+    const hidden = store.get("cqa.guide.hidden") === "1";
+    reopen.hidden = !(hidden && relevant);
+    if (hidden || !relevant) { box.innerHTML = ""; return; }
+    const next = steps.findIndex((s) => !s.ok);
+    // Collapsed to one line on phones, and once the core path (up to the decision) is done.
+    const coreDone = evaluated > 0 && steps.slice(0, 5).every((s) => s.ok);
+    let pref = null;
+    try { pref = sessionStorage.getItem("cqa.guide.open"); } catch { /* ignore */ }
+    const expanded = pref === "1" ? true : pref === "0" ? false : !(phone() || coreDone);
+    const actionOf = (s, i, state) => {
+      if (s.ok) return "";
+      const cls = `btn btn-sm ${state === "next" ? "guide-cta" : "guide-btn"}`;
+      const a = s.act;
+      if (a.href === null || s.need === false) return `<button class="${cls}" type="button" disabled title="Сначала выполните предыдущие шаги">${esc(a.label)}</button>`;
+      return a.btn ? `<button class="${cls}" type="button" data-guide="${a.btn}">${esc(a.label)}</button>`
+        : `<a class="${cls}" href="${esc(a.href)}">${esc(a.label)}</a>`;
+    };
+    const closeBtn = `<button class="btn btn-sm guide-x" type="button" data-guide-hide aria-label="Скрыть подсказку «С чего начать»" title="Скрыть">${icon("x")}</button>`;
+    if (!expanded) {
+      const s = steps[next];
+      box.innerHTML = `
+        <section class="guide is-collapsed" aria-label="С чего начать">
+          <button class="guide-bar" type="button" data-guide-toggle aria-expanded="false" aria-controls="guide">
+            <span class="guide-mark" aria-hidden="true">${s ? next + 1 : icon("check")}</span>
+            <span class="guide-bar-t">${s ? `<span class="guide-prog">Шаг ${next + 1} из ${steps.length}:</span> <b>${esc(s.t)}</b>` : "<b>Все шаги пройдены</b>"}</span>
+            <span class="guide-bar-more">Все шаги${icon("down")}</span>
+          </button>
+          ${s ? `<span class="guide-bar-act">${actionOf(s, next, "next")}</span>` : ""}
+          ${closeBtn}
+        </section>`;
+      return;
+    }
+    box.innerHTML = `
+      <section class="guide" aria-labelledby="guide-h">
+        <div class="guide-head">
+          <h2 id="guide-h">С чего начать</h2>
+          <span class="guide-prog">${nDone === steps.length ? "Все шаги пройдены" : `Пройдено ${nDone} из ${steps.length}`}</span>
+          <button class="btn btn-sm guide-btn guide-fold" type="button" data-guide-toggle aria-expanded="true" aria-controls="guide">Свернуть${icon("up")}</button>
+          ${closeBtn}
+        </div>
+        <ol class="guide-steps">
+          ${steps.map((s, i) => {
+            const state = s.ok ? "done" : i === next ? "next" : "todo";
+            const action = actionOf(s, i, state);
+            return `
+            <li class="guide-step is-${state}" ${state === "next" ? 'aria-current="step"' : ""}>
+              <span class="guide-mark" aria-hidden="true">${s.ok ? icon("check") : i + 1}</span>
+              <span class="sr-only">${s.ok ? "Выполнено:" : state === "next" ? "Следующий шаг:" : ""}</span>
+              <b class="guide-t">${esc(s.t)}</b>
+              <span class="guide-d">${esc(s.d)}</span>
+              ${action ? `<span class="guide-act">${action}</span>` : ""}
+            </li>`;
+          }).join("")}
+        </ol>
+      </section>`;
+    // On phones the steps scroll sideways: bring the next one into view without moving the page.
+    const ol = $(".guide-steps", box), cur = $(".is-next", box);
+    if (ol && cur && ol.scrollWidth > ol.clientWidth) ol.scrollLeft = Math.max(0, cur.offsetLeft - ol.offsetLeft - 16);
   }
 
   function drawKpis(list) {
@@ -187,7 +314,7 @@ export async function render(root) {
       <div class="card kpi">
         <div class="lbl">${icon("list")}Диалогов</div>
         <div class="v">${list.length}${list.length !== rows.length ? `<small> из ${rows.length}</small>` : ""}</div>
-        <div class="foot">чатов ${list.length - calls} · звонков ${calls}</div>
+        <div class="foot meta-list"><span>чатов ${list.length - calls}</span><span>звонков ${calls}</span></div>
       </div>
       <div class="card kpi">
         <div class="lbl">${icon("done")}Оценено</div>
@@ -264,7 +391,7 @@ export async function render(root) {
   function th(key, label, cls = "") {
     const on = state.sort.key === key;
     const aria = on ? (state.sort.dir > 0 ? "ascending" : "descending") : "none";
-    return `<th role="columnheader" scope="col" class="${cls}" aria-sort="${aria}"><button type="button" class="th-sort" data-sort="${key}" ${on ? `data-dir="${state.sort.dir}"` : ""}>${label}<span class="arr" aria-hidden="true">${on ? (state.sort.dir > 0 ? "▲" : "▼") : "↕"}</span></button></th>`;
+    return `<th role="columnheader" scope="col" class="${cls}" aria-sort="${aria}"><button type="button" class="th-sort" data-sort="${key}" ${on ? `data-dir="${state.sort.dir}"` : ""}>${label}<span class="arr" aria-hidden="true">${icon(on ? (state.sort.dir > 0 ? "up" : "down") : "sort")}</span></button></th>`;
   }
 
   function drawTable(list) {
@@ -342,6 +469,38 @@ export async function render(root) {
     if (e.target.closest("[data-reset]")) { resetFilters(); return; }
     const kpi = e.target.closest("[data-kpi-status]");
     if (kpi) { state.status = state.status === kpi.dataset.kpiStatus ? "" : kpi.dataset.kpiStatus; draw(); return; }
+    const g = e.target.closest("[data-guide]");
+    if (g) {
+      if (g.dataset.guide === "import") importDialog(onImported);
+      else if (g.dataset.guide === "eval") startBatch(true, g);
+      return;
+    }
+    if (e.target.closest("[data-guide-hide]")) {
+      store.set("cqa.guide.hidden", "1"); drawGuide();
+      $("#btn-guide", root).focus();
+      return;
+    }
+    const tg = e.target.closest("[data-guide-toggle]");
+    if (tg) {
+      const open = tg.getAttribute("aria-expanded") !== "true";
+      try { sessionStorage.setItem("cqa.guide.open", open ? "1" : "0"); } catch { /* ignore */ }
+      drawGuide();
+      $("#guide [data-guide-toggle]", root)?.focus();
+      return;
+    }
+    if (e.target.closest("#btn-guide")) {
+      store.del("cqa.guide.hidden");
+      try { sessionStorage.setItem("cqa.guide.open", "1"); } catch { /* ignore */ }
+      drawGuide();
+      $(".guide h2", root)?.scrollIntoView({ block: "nearest" });
+      return;
+    }
+    if (e.target.closest("#btn-filters")) {
+      const card = $(".conv-card", root), on = !card.classList.contains("show-filters");
+      card.classList.toggle("show-filters", on);
+      $("#btn-filters", root).setAttribute("aria-expanded", String(on));
+      return;
+    }
     const cta = e.target.closest("[data-cta]");
     if (cta) {
       if (cta.dataset.cta === "import") openImport();
@@ -389,7 +548,7 @@ export async function render(root) {
     if (loadedChecklistId !== state.checklistId || loadedGroup !== state.group) return;
     const scoped = filtersActive();
     const scope = scoped ? filtered() : rows;
-    const targets = onlyMissing ? scope.filter((r) => !r.eval_id || r.status === "error") : scope;
+    const targets = onlyMissing ? scope.filter(isNew) : scope;
     if (!targets.length) {
       toast(onlyMissing ? "Нет новых диалогов: все уже оценены этим чек-листом" : "Нет диалогов для оценки");
       return;
@@ -449,7 +608,7 @@ export async function render(root) {
         clearInterval(activePoll);
         if (store.get("cqa.batch") === String(id)) {
           store.del("cqa.batch");
-          toast(`Пакет #${b.id} завершён: ${b.done} ${plural(b.done, ["оценка", "оценки", "оценок"])}${b.failed ? `, ошибок: ${b.failed}` : ""}`, !!b.failed && !b.done);
+          toast(`Оценка набора #${b.id} завершена: ${b.done} ${plural(b.done, ["оценка", "оценки", "оценок"])}${b.failed ? `, ошибок: ${b.failed}` : ""}`, !!b.failed && !b.done);
         }
       }
       await load();
@@ -492,11 +651,11 @@ function batchPanel(b, { clName, eta: etaText }) {
     <div class="card batch-panel ${running ? "is-running" : "is-done"} ${failed ? "has-fail" : ""}" role="status">
       <div class="bp-ic">${running ? '<span class="spinner" aria-hidden="true"></span>' : icon(failed ? "alert" : "check")}</div>
       <div class="bp-title">
-        <b>${running ? "Идёт оценка" : "Оценка завершена"} · пакет #${esc(b.id)}</b>
-        <span class="muted small">${esc(clName(b.checklist_id))}${b.dataset_group ? ` · набор ${esc(b.dataset_group)}` : ""}</span>
+        <b>Оценка набора #${esc(b.id)}${running ? "" : " завершена"}</b>
+        <span class="muted small meta-list"><span>${esc(clName(b.checklist_id))}</span>${b.dataset_group ? `<span>набор ${esc(b.dataset_group)}</span>` : ""}</span>
       </div>
-      <div class="bp-pct">${p}%${!running ? `<button class="btn btn-sm btn-ghost" type="button" data-hide-batch aria-label="Скрыть панель пакета">${icon("x")}</button>` : ""}</div>
-      <div class="bp-bar" role="progressbar" aria-label="Прогресс пакета" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${done + failed}">
+      <div class="bp-pct">${p}%${!running ? `<button class="btn btn-sm btn-ghost" type="button" data-hide-batch aria-label="Скрыть панель оценки набора">${icon("x")}</button>` : ""}</div>
+      <div class="bp-bar" role="progressbar" aria-label="Прогресс оценки набора" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${done + failed}">
         ${done ? `<i style="width:${(done / Math.max(total, 1)) * 100}%" title="Оценено: ${done}"></i>` : ""}
         ${failed ? `<i class="f" style="width:${(failed / Math.max(total, 1)) * 100}%" title="Ошибок: ${failed}"></i>` : ""}
       </div>

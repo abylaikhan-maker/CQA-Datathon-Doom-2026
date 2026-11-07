@@ -39,12 +39,12 @@ export async function render(root) {
       </div>
     </div>
     ${kpis(s, rows, done, meta)}
-    ${s.evaluated ? charts(s, rows, done, cfg) : `
+    ${s.evaluated ? charts(s, rows, done, cfg, cl) : `
       <div class="card empty-state">
         <div class="ic">${icon("score")}</div>
         <h3>Пока нет оценок${cl ? ` по «${esc(cl.name)} v${esc(cl.version)}»` : ""}</h3>
-        <p>Запустите оценку диалогов этой версией чек-листа — здесь появятся распределения, разбивки и результаты по критериям.</p>
-        <a class="btn btn-primary" href="#/conversations">${icon("play")}К диалогам</a>
+        <p>Аналитика строится по оценённым диалогам. Запустите оценку на странице «Диалоги» — здесь появятся средний итог, разбивка по языкам и каналам и результаты по каждому критерию.</p>
+        <a class="btn btn-primary" href="#/conversations">${icon("play")}Перейти к оценке</a>
       </div>`}
   </div>`;
 
@@ -91,7 +91,7 @@ function kpis(s, rows, done, meta) {
       <a class="card kpi ${ap.open ? "is-warn" : ""}" href="#/appeals" title="Перейти к апелляциям">
         <span class="lbl">${icon("scale")}Апелляции открыты</span>
         <span class="v">${ap.open}</span>
-        <span class="foot" title="По всем наборам и версиям">изменено ${ap.changed} · подтв. ${ap.confirmed}</span>
+        <span class="foot meta-list" title="По всем наборам и версиям"><span>изменено ${ap.changed}</span><span>подтверждено ${ap.confirmed}</span></span>
       </a>
       <div class="card kpi">
         <div class="lbl">${icon("coin")}Стоимость оценки</div>
@@ -121,7 +121,7 @@ function hbars(entries, labelOf) {
     <div class="hbar-axis" aria-hidden="true"><span></span><div><span>0</span><span>50</span><span>100</span></div><span></span></div>`;
 }
 
-function charts(s, rows, done, cfg) {
+function charts(s, rows, done, cfg, cl) {
   const byLang = Object.entries(s.by_language || {})
     .sort(([a], [b]) => (LANG_ORDER.indexOf(a) + 1 || 99) - (LANG_ORDER.indexOf(b) + 1 || 99) || a.localeCompare(b));
   const chanMap = {};
@@ -204,7 +204,8 @@ function charts(s, rows, done, cfg) {
           }).join("") || `<tr><td colspan="8" class="empty">Нет оценок</td></tr>`}
         </tbody>
       </table></div>
-      ${weakest ? `<div class="card-pad" style="padding-top:0"><div class="insight">${icon("bulb")}<div>Чаще всего не выполняется: <b>${esc(weakest.c.code || "")} ${esc(weakest.c.title)}</b> — ${weakest.c.type === "scale" ? `средний балл ${esc(weakest.rateLabel)}` : `«Да» только в ${fmtNum(weakest.rate, 0)}% случаев`}. Хорошая тема для обучения операторов.</div></div></div>` : ""}
+      ${weakest ? `<div class="card-pad" style="padding-top:0"><div class="insight">${icon("bulb")}<div>Чаще всего не выполняется: <b>${esc(weakest.c.code || "")} ${esc(weakest.c.title)}</b> — ${weakest.c.type === "scale" ? `средний балл ${esc(weakest.rateLabel)}` : `«Да» только в ${fmtNum(weakest.rate, 0)}% случаев`}. Хорошая тема для обучения операторов.
+        <div class="next-hint" style="margin-top:6px"><a href="#/conversations">Найти такие диалоги</a>${cl ? `<span aria-hidden="true">·</span><a href="#/checklists/${esc(cl.id)}">Уточнить формулировку в чек-листе</a>` : ""}</div></div></div></div>` : ""}
     </div>`;
 
   return `
