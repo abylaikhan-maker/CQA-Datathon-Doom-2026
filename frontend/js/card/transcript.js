@@ -1,6 +1,4 @@
-// Chat-style transcript rendering shared by the conversation card and the appeal page.
-// Operator and client are bubbles on opposite sides; bot / system messages are
-// subtle centred context rows. All external text goes through esc().
+// Transcript rendering shared by the conversation card and the appeal page.
 import { esc, fmtClock, fmtTs, SPEAKER } from "../util.js";
 
 export const speakerKind = (sp) => {
@@ -34,7 +32,7 @@ export function msgHtml(m, n, { sec = null, playable = false, cls = "", idPrefix
   return `
     <div class="cv-msg cv-sp-${k} ${cls}" id="${idPrefix}${n}" data-n="${n}" data-sp="${k}">
       <div class="cv-bubble">
-        <div class="cv-mhead"><span class="cv-n">#${n}</span><span class="cv-who">${esc(who)}</span>${ts}${play}</div>
+        <div class="cv-mhead"><span class="cv-n">#${n}</span><span class="cv-who">${esc(who)}</span>${ts}${play}<span class="cv-proof-label">Основание оценки</span></div>
         <div class="cv-text">${esc(m.text)}</div>
       </div>
     </div>`;

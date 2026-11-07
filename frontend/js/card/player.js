@@ -1,17 +1,10 @@
-// Call player for the conversation card: custom controls + a two-lane timeline
-// (Клиент / Оператор, plus a subtle bot/system lane) built from message timestamps.
+// Call player and a compact timeline built from message timestamps.
 // The native <audio> element stays hidden; everything degrades gracefully when the
 // recording cannot be loaded (CORS / 404) — the timeline still navigates the transcript.
 import { esc, fmtClock, SPEAKER } from "../util.js";
 
-const LANES = [
-  { key: "client", label: "Клиент" },
-  { key: "operator", label: "Оператор" },
-  { key: "other", label: "Бот · система" },
-];
-const laneOf = (sp) => (sp === "client" ? "client" : sp === "operator" ? "operator" : "other");
 const RATES = [1, 1.25, 1.5, 2];
-const BARS = 220; // waveform resolution per lane
+const BARS = 112;
 
 const ICON_PLAY = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg>`;
 const ICON_PAUSE = `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6.5" y="5" width="4" height="14" rx="1"/><rect x="13.5" y="5" width="4" height="14" rx="1"/></svg>`;
@@ -27,7 +20,7 @@ export function buildSegments(transcript, seconds) {
     let end = x.s + est;
     if (next) end = Math.min(end, Math.max(x.s + 0.8, next.s - 0.25));
     const sp = String(x.m.speaker || "").toLowerCase();
-    return { n: x.n, lane: laneOf(sp), speaker: sp, start: x.s, end, text: String(x.m.text || "") };
+    return { n: x.n, speaker: sp, start: x.s, end, text: String(x.m.text || "") };
   });
 }
 
@@ -78,21 +71,27 @@ function rnd(a, b) {
  */
 export function createPlayer(host, { audioUrl, sourceUrl, segments, onSegment, onActive, retime }) {
   let transcriptEnd = segments.reduce((mx, s) => Math.max(mx, s.end), 0) || 1;
-  const lanes = LANES.filter((l) => l.key !== "other" || segments.some((s) => s.lane === "other"));
   const st = {
     audioDur: null, mode: "full", failed: !audioUrl, raf: 0, active: null, rate: 0,
     evidence: new Set(), focus: null, range: new Set(),
   };
 
   host.innerHTML = `
-    <section class="card cv-player ${audioUrl ? "" : "is-noaudio"}" aria-label="Запись звонка">
+    <section class="cv-player ${audioUrl ? "" : "is-noaudio"}" aria-label="Запись звонка">
       <div class="cv-pl-top">
         <button class="cv-pl-play" type="button" data-pl="play" aria-label="Воспроизвести" ${audioUrl ? "" : "disabled"}>${ICON_PLAY}</button>
-        <div class="cv-pl-time" aria-live="off"><b data-pl="cur">00:00</b><span> / </span><span data-pl="dur">${fmtClock(transcriptEnd)}</span></div>
-        <div class="cv-pl-title">
-          <b>Запись звонка</b>
-          <span class="cv-pl-status" data-pl="status">${audioUrl ? "" : "Ссылка на запись отсутствует — таймлайн по меткам времени"}</span>
+        <div class="cv-tl" aria-label="Шкала времени по репликам">
+          <div class="cv-tl-tracks" data-pl="tracks">
+            <div class="cv-lane"></div>
+            <div class="cv-playhead" data-pl="head" aria-hidden="true"></div>
+            <div class="cv-hover" data-pl="hover" aria-hidden="true"></div>
+          </div>
+          <input class="cv-pl-seek" type="range" min="0" step="0.1" value="0" data-pl="seek" aria-label="Позиция в записи" ${audioUrl ? "" : "disabled"}>
         </div>
+        <div class="cv-pl-time" aria-live="off"><b data-pl="cur">00:00</b><span> / </span><span data-pl="dur">${fmtClock(transcriptEnd)}</span></div>
+      </div>
+      <div class="cv-pl-extras">
+        <span class="cv-pl-status" data-pl="status">${audioUrl ? "" : "Запись недоступна. Можно открыть реплики на шкале."}</span>
         <div class="cv-pl-tools">
           <div class="cv-seg-toggle" data-pl="zoom" role="group" aria-label="Масштаб таймлайна" hidden>
             <button type="button" data-mode="full" aria-pressed="true">Вся запись</button>
@@ -102,26 +101,13 @@ export function createPlayer(host, { audioUrl, sourceUrl, segments, onSegment, o
           <a class="btn btn-sm" href="${esc(safeHref(sourceUrl || audioUrl))}" target="_blank" rel="noopener">Открыть в плеере ↗</a>` : ""}
         </div>
       </div>
-      <div class="cv-tl">
-        <div class="cv-tl-labels" aria-hidden="true">
-          ${lanes.map((l) => `<span class="cv-lab-${l.key}"><i></i>${esc(l.label)}</span>`).join("")}
-        </div>
-        <div class="cv-tl-tracks" data-pl="tracks">
-          ${lanes.map((l) => `<div class="cv-lane cv-lane-${l.key}" data-lane="${l.key}"></div>`).join("")}
-          <div class="cv-playhead" data-pl="head" aria-hidden="true"></div>
-          <div class="cv-hover" data-pl="hover" aria-hidden="true"></div>
-        </div>
-        <div></div>
-        <div class="cv-tl-axis" data-pl="axis" aria-hidden="true"></div>
-      </div>
-      <input class="cv-pl-seek" type="range" min="0" step="0.1" value="0" data-pl="seek" aria-label="Позиция в записи" ${audioUrl ? "" : "disabled"}>
       ${audioUrl ? `<audio data-pl="audio" preload="metadata" src="${esc(audioUrl)}"></audio>` : ""}
     </section>`;
 
   const q = (k) => host.querySelector(`[data-pl="${k}"]`);
   const el = {
     play: q("play"), cur: q("cur"), dur: q("dur"), status: q("status"), zoom: q("zoom"), rate: q("rate"),
-    tracks: q("tracks"), head: q("head"), hover: q("hover"), axis: q("axis"), seek: q("seek"), audio: q("audio"),
+    tracks: q("tracks"), head: q("head"), hover: q("hover"), seek: q("seek"), audio: q("audio"),
   };
   const audio = el.audio;
 
@@ -131,27 +117,22 @@ export function createPlayer(host, { audioUrl, sourceUrl, segments, onSegment, o
 
   function layout() {
     const R = range();
-    for (const l of lanes) {
-      const laneEl = el.tracks.querySelector(`[data-lane="${l.key}"]`);
-      const segs = segments.filter((s) => s.lane === l.key);
-      const heights = new Array(BARS).fill(0);
-      segs.forEach((s) => {
-        if (s.start > R) return;
-        const a = Math.floor((s.start / R) * BARS), b = Math.min(BARS - 1, Math.max(a, Math.ceil((Math.min(s.end, R) / R) * BARS) - 1));
-        for (let i = a; i <= b; i++) heights[i] = Math.max(heights[i], 0.28 + 0.72 * rnd(s.n, i));
-      });
-      const bw = 1000 / BARS;
-      const bars = heights.map((h, i) => (h ? `<rect x="${(i * bw + bw * 0.18).toFixed(2)}" y="${(20 - h * 18).toFixed(2)}" width="${(bw * 0.64).toFixed(2)}" height="${(h * 36).toFixed(2)}" rx="1"/>` : "")).join("");
-      const svg = (cls) => `<svg class="cv-wave ${cls}" viewBox="0 0 1000 40" preserveAspectRatio="none" aria-hidden="true"><line x1="0" y1="20" x2="1000" y2="20"/>${bars}</svg>`;
-      laneEl.innerHTML = segs.filter((s) => s.start <= R).map((s) => {
-        const left = (s.start / R) * 100, width = ((Math.min(s.end, R) - s.start) / R) * 100;
-        const who = SPEAKER[s.speaker] || s.speaker || "";
-        const label = `#${s.n} · ${who} · ${fmtClock(s.start)} — ${s.text.length > 70 ? s.text.slice(0, 70) + "…" : s.text}`;
-        return `<button type="button" class="cv-seg" data-seg="${s.n}" style="left:${left.toFixed(3)}%;width:${width.toFixed(3)}%" title="${esc(label)}" aria-label="${esc(label)}"></button>`;
-      }).join("") + svg("") + svg("is-played");
+    const visible = segments.filter((s) => s.start <= R);
+    const heights = new Array(BARS).fill(0.08);
+    for (const s of visible) {
+      const first = Math.floor(s.start / R * BARS);
+      const last = Math.min(BARS - 1, Math.max(first, Math.ceil(Math.min(s.end, R) / R * BARS) - 1));
+      for (let i = first; i <= last; i++) heights[i] = Math.max(heights[i], 0.25 + 0.72 * rnd(s.n, i));
     }
-    // Axis: 5 ticks.
-    el.axis.innerHTML = [0, 0.25, 0.5, 0.75, 1].map((f) => `<span style="left:${f * 100}%">${fmtClock(R * f)}</span>`).join("");
+    const step = 1000 / BARS;
+    const bars = heights.map((h, i) => `<rect x="${(i * step + step * .2).toFixed(2)}" y="${(20 - h * 18).toFixed(2)}" width="${(step * .55).toFixed(2)}" height="${(h * 36).toFixed(2)}" rx="2"/>`).join("");
+    const svg = (cls) => `<svg class="cv-wave ${cls}" viewBox="0 0 1000 40" preserveAspectRatio="none" aria-hidden="true">${bars}</svg>`;
+    el.tracks.querySelector(".cv-lane").innerHTML = visible.map((s) => {
+      const left = s.start / R * 100, width = (Math.min(s.end, R) - s.start) / R * 100;
+      const who = SPEAKER[s.speaker] || s.speaker || "";
+      const label = `#${s.n} · ${who} · ${fmtClock(s.start)} — ${s.text.length > 70 ? s.text.slice(0, 70) + "…" : s.text}`;
+      return `<button type="button" class="cv-seg" data-seg="${s.n}" style="left:${left.toFixed(3)}%;width:${width.toFixed(3)}%" title="${esc(label)}" aria-label="${esc(label)}"></button>`;
+    }).join("") + svg("") + svg("is-played");
     el.seek.max = String(R);
     applyMarks();
     tick();
@@ -165,7 +146,6 @@ export function createPlayer(host, { audioUrl, sourceUrl, segments, onSegment, o
     el.tracks.querySelectorAll(".cv-wave.is-played").forEach((s) => (s.style.clipPath = `inset(0 ${(100 - p * 100).toFixed(3)}% 0 0)`));
     el.cur.textContent = fmtClock(t);
     if (document.activeElement !== el.seek) el.seek.value = String(Math.min(t, R));
-    el.seek.style.setProperty("--p", `${p * 100}%`);
     // Active (karaoke) message while playing: the last segment that already started.
     if (playing()) {
       let act = null;

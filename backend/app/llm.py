@@ -23,7 +23,14 @@ RESPONSE_SCHEMA = {
                     "analysis": {"type": "STRING"},
                     "answer": {"type": "STRING"},
                     "explanation": {"type": "STRING"},
-                    "evidence": {"type": "ARRAY", "items": {"type": "INTEGER"}},
+                    "evidence": {
+                        "type": "ARRAY",
+                        "items": {
+                            "type": "OBJECT",
+                            "properties": {"turn": {"type": "INTEGER"}, "quote": {"type": "STRING"}},
+                            "required": ["turn", "quote"],
+                        },
+                    },
                     "checked_from": {"type": "INTEGER", "nullable": True},
                     "checked_to": {"type": "INTEGER", "nullable": True},
                     "na_reason": {"type": "STRING", "nullable": True},
@@ -158,6 +165,10 @@ def _mock(cfg: dict, conv: dict) -> tuple[dict, dict, str]:
         else:
             item["answer"] = "yes"
             item["explanation"] = "Эвристическая оценка без LLM (mock)."
+        item["evidence"] = [
+            {"turn": turn, "quote": msgs[turn - 1]["text"]}
+            for turn in item["evidence"] if 1 <= turn <= len(msgs) and msgs[turn - 1]["text"].strip()
+        ]
         out.append(item)
     return ({"criteria": out, "summary": "Оценка выполнена в mock-режиме (ключ LLM не задан)."},
             {"input_tokens": 0, "output_tokens": 0, "calls": 0}, "mock-heuristic")

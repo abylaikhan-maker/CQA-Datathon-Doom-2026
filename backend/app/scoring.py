@@ -10,6 +10,7 @@
 """
 from __future__ import annotations
 
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 
 YES, NO, NA = "yes", "no", "na"
@@ -53,15 +54,15 @@ def normalize_answer(criterion: dict, raw: Any) -> tuple[str | float, str | None
     return NO, f"Некорректный ответ: {raw}"
 
 
-def criterion_ratio(criterion: dict, answer: str | float) -> float | None:
+def criterion_ratio(criterion: dict, answer: str | float) -> Decimal | None:
     """Share of the criterion weight earned; None when N/A."""
     if answer == NA:
         return None
     if criterion["type"] == "scale":
         values = scale_values(criterion)
         top = values[0] if values else 0.0
-        return float(answer) / top if top else 0.0
-    return 1.0 if answer == YES else 0.0
+        return Decimal(str(answer)) / Decimal(str(top)) if top else Decimal(0)
+    return Decimal(int(answer == YES))
 
 
 def compute(config: dict, answers: dict[str, Any]) -> dict:
@@ -69,23 +70,23 @@ def compute(config: dict, answers: dict[str, Any]) -> dict:
     rounding = int(config.get("rounding", 2))
     criteria = config["criteria"]
 
-    applicable_weight = 0.0
+    applicable_weight = Decimal(0)
     for c in criteria:
         if c["type"] == "critical" or float(c.get("weight") or 0) <= 0:
             continue
         if answers.get(c["id"], NA) != NA:
-            applicable_weight += float(c["weight"])
+            applicable_weight += Decimal(str(c["weight"]))
 
     rows = []
     critical_hits = []
-    total = 0.0
+    earned_weight = Decimal(0)
     for c in criteria:
         ans = answers.get(c["id"])
-        base_w = float(c.get("weight") or 0)
+        base_w = Decimal(str(c.get("weight") or 0))
         row = {
             "criterion_id": c["id"],
             "answer": ans,
-            "base_weight": base_w,
+            "base_weight": float(base_w),
             "effective_weight": None,
             "points": None,
             "max_points": None,
@@ -94,10 +95,11 @@ def compute(config: dict, answers: dict[str, Any]) -> dict:
             if ans == YES:
                 critical_hits.append(c["id"])
         elif base_w > 0 and ans != NA and applicable_weight > 0:
-            eff = base_w * 100.0 / applicable_weight
-            pts = (criterion_ratio(c, ans) or 0.0) * eff
-            row.update(effective_weight=round(eff, 4), points=round(pts, 4), max_points=round(eff, 4))
-            total += pts
+            ratio = criterion_ratio(c, ans)
+            eff = base_w * 100 / applicable_weight
+            row.update(effective_weight=float(round(eff, 4)), points=float(round(ratio * eff, 4)),
+                       max_points=float(round(eff, 4)))
+            earned_weight += ratio * base_w
         rows.append(row)
 
     sections = []
@@ -113,11 +115,15 @@ def compute(config: dict, answers: dict[str, Any]) -> dict:
             "percent": round(pts / mx * 100, rounding) if mx else None,
         })
 
+    total = None
+    if applicable_weight > 0:
+        precision = Decimal(1).scaleb(-rounding)
+        total = float((earned_weight * 100 / applicable_weight).quantize(precision, rounding=ROUND_HALF_UP))
     return {
         "criteria": rows,
         "sections": sections,
-        "total": round(total, rounding) if applicable_weight > 0 else None,
-        "applicable_weight": applicable_weight,
+        "total": total,
+        "applicable_weight": float(applicable_weight),
         "critical": bool(critical_hits),
         "critical_criteria": critical_hits,
     }

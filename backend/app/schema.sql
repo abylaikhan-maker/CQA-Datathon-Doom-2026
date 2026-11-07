@@ -62,6 +62,25 @@ CREATE TABLE IF NOT EXISTS appeals (
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     resolved_at     TIMESTAMPTZ
 );
+ALTER TABLE appeals ADD COLUMN IF NOT EXISTS case_details JSONB;
+ALTER TABLE checklists ADD COLUMN IF NOT EXISTS source_appeal_id INT REFERENCES appeals(id) ON DELETE SET NULL;
+
+CREATE TABLE IF NOT EXISTS rule_check_examples (
+    checklist_name   TEXT NOT NULL,
+    criterion_id     TEXT NOT NULL,
+    conversation_id  TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    expected_answer  JSONB NOT NULL,
+    source_appeal_id INT REFERENCES appeals(id) ON DELETE SET NULL,
+    PRIMARY KEY (checklist_name, criterion_id, conversation_id)
+);
+
+CREATE TABLE IF NOT EXISTS rule_check_reports (
+    candidate_id INT NOT NULL REFERENCES checklists(id) ON DELETE CASCADE,
+    criterion_id TEXT NOT NULL,
+    snapshot     JSONB NOT NULL,
+    report       JSONB NOT NULL,
+    PRIMARY KEY (candidate_id, criterion_id)
+);
 
 CREATE TABLE IF NOT EXISTS batches (
     id            SERIAL PRIMARY KEY,

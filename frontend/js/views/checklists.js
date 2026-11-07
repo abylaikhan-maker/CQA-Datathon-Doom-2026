@@ -24,16 +24,21 @@ const store = {
 
 let offUnload = null;
 
-export async function render(root, params) {
+export async function render(root, params, query = {}) {
   if (offUnload) { offUnload(); offUnload = null; }
-  const list = await api.checklists();
+  const [list, appealDetail] = await Promise.all([
+    api.checklists(), /^\d+$/.test(query.appeal || "") ? api.appeal(Number(query.appeal)) : null,
+  ]);
+  const feedback = appealDetail?.appeal.status !== "open" ? appealDetail : null;
+  const family = feedback ? list.filter((c) => c.name === feedback.evaluation.checklist_name) : [];
   let current;
   if (params.id === "new") {
     current = { id: null, config: blankConfig(), version: null, is_active: false };
   } else {
-    const id = params.id ? Number(params.id) : (list.find((c) => c.is_active) || list[0])?.id;
+    const id = params.id ? Number(params.id) : (family[0] || list.find((c) => c.is_active) || list[0])?.id;
     current = id ? await api.checklist(id) : { id: null, config: blankConfig() };
   }
+  if (!root.isConnected) return;
   draft = structuredClone(current.config);
   draft.sections ||= [];
   draft.criteria ||= [];
@@ -41,14 +46,44 @@ export async function render(root, params) {
   openSet = new Set();
   newSet = new Set();
   const meta = list.find((c) => c.id === current.id);
+  const source = family.some((c) => c.id === current.id) ? feedback.appeal : null;
+  const target = source ? draft.criteria.find((c) => c.id === source.criterion_id) : null;
+  if (target) openSet.add(target);
+  const conversation = query.conversation || (source ? feedback.conversation.id : "");
+  const comparison = query.eval || (source ? feedback.evaluation.id : null);
+  const hasEarlierVersion = list.some((c) => c.name === current.config.name && c.version < current.version);
+  const ruleCheckQuery = target ? `?${new URLSearchParams({ criterion: target.id })}` : "";
+  const editorParams = new URLSearchParams();
+  if (query.conversation) editorParams.set("conversation", query.conversation);
+  if (query.eval) editorParams.set("eval", query.eval);
+  if (feedback) editorParams.set("appeal", feedback.appeal.id);
+  const editorQuery = editorParams.size ? `?${editorParams}` : "";
+  const returnToDialog = (kid) => {
+    const q = new URLSearchParams({ checklist: kid });
+    if (comparison) q.set("eval", comparison);
+    if (target) q.set("crit", target.id);
+    return `#/conversation/${encodeURIComponent(conversation)}?${q}`;
+  };
 
   root.innerHTML = `<div class="cl-page">
     <div class="page-head">
       <div><h1>Чек-листы</h1>
-        <div class="sub">Каждое сохранение создаёт новую версию. Старые оценки остаются привязаны к своей версии.</div></div>
+        <div class="sub">Настройте критерии и сохраните их новой версией.</div></div>
       <div class="spacer"></div>
-      <div class="page-actions"><a class="btn" href="#/checklists/new" data-nav-guard>${icon("plus")}Новый чек-лист</a></div>
+      <div class="page-actions"><a class="btn btn-primary" href="#/checklists/new${esc(editorQuery)}" data-nav-guard>${icon("plus")}Новый чек-лист</a></div>
     </div>
+    ${source ? `<div class="qa-handoff">
+      <span class="qa-handoff-icon">${icon("list")}</span>
+      <div><b>Правило по апелляции <a href="#/appeals/${source.id}">#${source.id}</a></b>
+        <div>${esc(source.reason)}</div>
+        <div>${target ? "Сформулируйте общее правило для похожих диалогов и сохраните новую версию." : "Спорного критерия нет в этой версии. Выберите подходящую версию слева."}</div></div>
+      ${target ? '<button type="button" class="btn" id="focus-feedback-rule">К уточнению</button>' : ""}
+    </div>` : conversation ? `<div class="qa-handoff">
+      <span class="qa-handoff-icon">${icon("chat")}</span>
+      <div><b>Новые правила для диалога <span class="mono">${esc(conversation)}</span></b>
+      <div>Сохраните версию, затем вернитесь к разговору и переоцените его.</div></div>
+      <a class="btn" href="${esc(returnToDialog(current.id || ""))}" id="return-dialog">К диалогу</a>
+    </div>` : ""}
     <div class="cl-grid">
       <section class="card cl-list" aria-label="Версии чек-листов">
         <div class="card-head"><h2>Версии</h2><span class="badge">${list.length}</span></div>
@@ -67,9 +102,11 @@ export async function render(root, params) {
             <h2>${current.id ? `${esc(current.config.name)} <span class="muted">· v${esc(current.version)}</span>` : "Новый чек-лист"}
               ${current.is_active ? `<span class="badge yes">${icon("check")}активный</span>` : ""}</h2>
             ${current.id ? `<div class="muted small">${meta ? `создан ${esc(fmtDate(meta.created_at))} · ${meta.evaluations} ${plural(meta.evaluations, ["оценка", "оценки", "оценок"])}` : ""}${current.note ? ` · «${esc(current.note)}»` : ""}</div>` : `<div class="muted small">Заполните параметры и добавьте критерии</div>`}
+            ${current.source_appeal_id ? `<a class="small" href="#/appeals/${current.source_appeal_id}">Апелляция #${current.source_appeal_id}</a>` : ""}
           </div>
           <div class="ed-head-actions">
             ${current.id && !current.is_active ? `<button class="btn btn-sm" type="button" id="btn-activate">${icon("star")}Сделать активным</button>` : ""}
+            ${current.id && hasEarlierVersion ? `<a class="btn btn-sm" id="btn-rule-check" href="#/checklists/${current.id}/rule-check${esc(ruleCheckQuery)}">${icon("check")}Проверить правило</a>` : ""}
             ${current.id ? `<button class="btn btn-sm" type="button" id="btn-apply">${icon("play")}Применить к набору…</button>` : ""}
             <button class="btn btn-sm" type="button" id="btn-json">${icon("code")}JSON</button>
           </div>
@@ -87,18 +124,27 @@ export async function render(root, params) {
   });
   $$(".cl-item", page).forEach((el) => el.addEventListener("click", async () => {
     if (Number(el.dataset.id) === current.id) return;
-    if (await leaveOk()) location.hash = `#/checklists/${el.dataset.id}`;
+    if (await leaveOk()) location.hash = `#/checklists/${el.dataset.id}${editorQuery}`;
   }));
   $("[data-nav-guard]", page).addEventListener("click", async (e) => {
     e.preventDefault();
-    if (await leaveOk()) location.hash = "#/checklists/new";
+    if (await leaveOk()) location.hash = `#/checklists/new${editorQuery}`;
+  });
+  $("#btn-rule-check", page)?.addEventListener("click", async (e) => {
+    e.preventDefault();
+    const hash = e.currentTarget.hash;
+    if (await leaveOk()) location.hash = hash;
+  });
+  $("#return-dialog", page)?.addEventListener("click", async (e) => {
+    e.preventDefault();
+    if (await leaveOk()) location.hash = returnToDialog(current.id || "");
   });
   $("#btn-activate", page)?.addEventListener("click", async (e) => {
     busy(e.currentTarget, true, "…");
     try {
       await api.activateChecklist(current.id);
       toast(`«${current.config.name} v${current.version}» теперь активный — он выбирается по умолчанию для новых оценок`);
-      render(root, params);
+      render(root, params, query);
     } catch (err) { toast(err.message, true); busy(e.currentTarget, false); }
   });
   $("#btn-apply", page)?.addEventListener("click", () => applyDialog(current));
@@ -106,11 +152,18 @@ export async function render(root, params) {
 
   const editor = $("#editor", page);
   drawEditor(editor);
+  $("#focus-feedback-rule", page)?.addEventListener("click", () => {
+    const index = draft.criteria.indexOf(target);
+    if (index < 0) return;
+    openSet.add(target);
+    drawEditor(editor);
+    $(`[data-k="criteria.${index}.guidance"]`, editor)?.focus();
+  });
   editor.addEventListener("input", (e) => onInput(e, editor));
   editor.addEventListener("change", (e) => onChange(e, editor));
   editor.addEventListener("click", (e) => onClick(e, editor));
   $("#save-bar", page).addEventListener("click", (e) => {
-    if (e.target.closest("[data-act=save]")) openSave(page, current, list);
+    if (e.target.closest("[data-act=save]")) openSave(page, current, list, conversation ? returnToDialog : null, source?.id);
     if (e.target.closest("[data-act=show-err]")) revealFirstError(editor);
   });
 
@@ -295,8 +348,19 @@ function isDirty() {
 function errSlot(key) { return `<small class="field-err" data-err="${esc(key)}" role="alert"></small>`; }
 
 function drawEditor(el, focusKey) {
+  const settingsOpen = el.querySelector(".ed-settings")?.open;
   el.innerHTML = `
-    <div class="ed-section-title">Общие параметры</div>
+    <div class="ed-section-title">Критерии <span class="badge brand">${draft.criteria.length}</span><span class="spacer"></span>
+      ${draft.criteria.length ? `<button class="btn btn-sm btn-ghost" type="button" data-act="expand-all">${draft.criteria.every((c) => openSet.has(c)) ? "Свернуть все" : "Развернуть все"}</button>` : ""}
+      <button class="btn btn-sm" type="button" data-act="add-crit">${icon("plus")}Добавить критерий</button></div>
+    ${errSlot("criteria")}
+    <div id="crit-list">${draft.criteria.map((c, i) => critEditor(c, i)).join("")}</div>
+
+    <div class="ed-section-title">Распределение весов <span class="muted small">итог всегда нормируется к 100</span></div>
+    <div class="weights" id="weights"></div>
+
+    <details class="ed-settings"${settingsOpen ? " open" : ""}>
+    <summary>Общие параметры и секции</summary>
     <div class="ed-general">
       <label class="field span4">Название чек-листа<input class="input" data-k="name" value="${esc(draft.name)}">${errSlot("name")}</label>
       <label class="field span2">Округление итога, знаков<input class="input" type="number" min="0" max="4" data-k="rounding" value="${esc(draft.rounding ?? 2)}"></label>
@@ -304,9 +368,6 @@ function drawEditor(el, focusKey) {
       <label class="field span6">Общие правила для оценщика <span class="hint">контекст, который получает модель вместе с критериями</span>
         <textarea class="input" rows="3" data-k="general_rules">${esc(draft.general_rules || "")}</textarea></label>
     </div>
-
-    <div class="ed-section-title">Распределение весов <span class="muted small">итог всегда нормируется к 100</span></div>
-    <div class="weights" id="weights"></div>
 
     <div class="ed-section-title">Секции <span class="muted">(${draft.sections.length})</span></div>
     <div>
@@ -318,16 +379,11 @@ function drawEditor(el, focusKey) {
         </div>`).join("")}
       <button class="btn btn-sm" type="button" data-act="add-section">${icon("plus")}Секция</button>
     </div>
-
-    <div class="ed-section-title">Критерии <span class="muted">(${draft.criteria.length})</span><span class="spacer"></span>
-      ${draft.criteria.length ? `<button class="btn btn-sm btn-ghost" type="button" data-act="expand-all">${draft.criteria.every((c) => openSet.has(c)) ? "Свернуть все" : "Развернуть все"}</button>` : ""}</div>
-    ${errSlot("criteria")}
-    <div id="crit-list">${draft.criteria.map((c, i) => critEditor(c, i)).join("")}</div>
-    <button class="btn" type="button" data-act="add-crit">${icon("plus")}Добавить критерий</button>`;
+    </details>`;
   paint(el);
   if (focusKey) {
     const f = el.querySelector(`[data-k="${CSS.escape(focusKey)}"]`);
-    if (f) f.focus({ preventScroll: true });
+    if (f) f.focus();
   }
 }
 
@@ -454,7 +510,12 @@ function revealFirstError(el) {
     if (c && !openSet.has(c)) { openSet.add(c); drawEditor(el); }
   }
   const target = el.querySelector(`[data-k="${CSS.escape(key)}"]`) || el.querySelector(`[data-err="${CSS.escape(key)}"]`);
-  if (target) { target.scrollIntoView({ block: "center", behavior: "smooth" }); if (target.focus) target.focus({ preventScroll: true }); }
+  if (target) {
+    const settings = target.closest("details");
+    if (settings) settings.open = true;
+    target.scrollIntoView({ block: "center", behavior: "smooth" });
+    if (target.focus) target.focus({ preventScroll: true });
+  }
 }
 
 function setPath(obj, path, value) {
@@ -492,17 +553,15 @@ function syncSectionOptions(editor) {
 
 function onChange(e, editor) {
   const t = e.target;
-  if (!t.dataset.k) return;
+  if (!t.dataset.k || (t.type !== "checkbox" && t.tagName !== "SELECT")) return;
   const k = t.dataset.k;
-  if (t.type === "checkbox" || t.tagName === "SELECT") {
-    const v = t.type === "checkbox" ? t.checked : t.value;
-    setPath(draft, k, v);
-    if (k.endsWith(".type")) {
-      const c = draft.criteria[Number(k.split(".")[1])];
-      if (v === "scale" && !(c.scale || []).length) c.scale = [{ value: 10, description: "" }, { value: 5, description: "" }, { value: 0, description: "" }];
-      if (v === "critical") { c.weight = 0; c.na_allowed = false; }
-      if (v !== "critical" && !Number(c.weight)) c.weight = 10;
-    }
+  const v = t.type === "checkbox" ? t.checked : t.value;
+  setPath(draft, k, v);
+  if (k.endsWith(".type")) {
+    const c = draft.criteria[Number(k.split(".")[1])];
+    if (v === "scale" && !(c.scale || []).length) c.scale = [{ value: 10, description: "" }, { value: 5, description: "" }, { value: 0, description: "" }];
+    if (v === "critical") { c.weight = 0; c.na_allowed = false; }
+    if (v !== "critical" && !Number(c.weight)) c.weight = 10;
   }
   // Type and N/A change the shape of the criterion form.
   if (t.dataset.redraw !== undefined) drawEditor(editor, k);
@@ -594,7 +653,7 @@ function cleanConfig() {
   return cfg;
 }
 
-function openSave(page, current, list) {
+function openSave(page, current, list, returnToDialog, sourceAppealId) {
   const editor = $("#editor", page);
   const errs = validate();
   if (Object.keys(errs).length) {
@@ -607,27 +666,31 @@ function openSave(page, current, list) {
   const sameName = list.filter((c) => c.name === cfg.name);
   const next = sameName.length ? Math.max(...sameName.map((c) => c.version)) + 1 : 1;
   const nameChanged = base && base.name !== cfg.name;
+  const note = [sourceAppealId ? `По апелляции #${sourceAppealId}` : "", base ? autoNote(d) : ""].filter(Boolean).join(" · ");
   const m = modal({
     title: `Сохранить «${cfg.name}» v${next}`,
-    submitText: `Сохранить v${next}`,
+    submitText: returnToDialog ? `Сохранить v${next} и вернуться` : `Сохранить v${next}`,
     body: `
       ${base ? `<div class="small muted">Сравнение с <b>${esc(base.name)} v${esc(current.version)}</b>. Будет создана новая версия <b>v${next}</b>; оценки по v${esc(current.version)} останутся привязаны к ней.</div>`
         : `<div class="small muted">Будет создан чек-лист <b>${esc(cfg.name)}</b>, версия <b>v${next}</b>, ${cfg.criteria.length} ${plural(cfg.criteria.length, ["критерий", "критерия", "критериев"])}.</div>`}
       ${nameChanged ? `<div class="note warn">Название изменено: версии нумеруются в пределах названия, поэтому это будет «${esc(cfg.name)}» v${next}.</div>` : ""}
       ${base ? diffHtml(d) : ""}
       <label class="field">Комментарий к версии <span class="hint">виден в списке версий</span>
-        <input class="input" id="sv-note" maxlength="300" value="${esc(base ? autoNote(d) : "")}" placeholder="Что изменено и зачем"></label>
-      <label class="check"><input type="checkbox" id="sv-activate" checked> Сделать активной — выбирается по умолчанию для новых оценок</label>`,
+        <input class="input" id="sv-note" maxlength="300" value="${esc(note.slice(0, 300))}" placeholder="Что изменено и зачем"></label>
+      <label class="check"><input type="checkbox" id="sv-activate" ${returnToDialog ? "" : "checked"}> Сделать активной — выбирается по умолчанию для новых оценок</label>`,
     onSubmit: async (el) => {
       const ok = $("[data-ok]", el);
       busy(ok, true, "Сохранение…");
       try {
         const activate = $("#sv-activate", el).checked;
-        const saved = await api.saveChecklist(cfg, $("#sv-note", el).value.trim() || null, activate);
+        const saved = await api.saveChecklist(cfg, $("#sv-note", el).value.trim() || null, activate, sourceAppealId);
         draft = null; base = null; // not dirty any more
         toast(`Сохранено: ${saved.name} v${saved.version}`);
-        location.hash = `#/checklists/${saved.id}`;
-        setTimeout(() => applyDialog({ id: saved.id, version: saved.version, config: saved.config || cfg, is_active: activate }, { justSaved: true }), 0);
+        if (returnToDialog) location.hash = returnToDialog(saved.id);
+        else {
+          location.hash = `#/checklists/${saved.id}`;
+          setTimeout(() => applyDialog({ id: saved.id, version: saved.version, config: saved.config || cfg, is_active: activate }, { justSaved: true }), 0);
+        }
       } finally { busy(ok, false); }
     },
   });

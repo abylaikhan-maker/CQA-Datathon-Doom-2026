@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import json
-from urllib.parse import urlencode, urlparse, parse_qsl, urlunparse
+from urllib.parse import parse_qsl, quote, urlencode, urlparse, urlunparse
 
 import httpx
 
@@ -14,12 +14,23 @@ class DatasetError(Exception):
 
 
 def build_url(group_id: str, base: str | None = None) -> str:
-    base = (base or config.DATASET_API_URL).strip()
+    if not group_id:
+        raise DatasetError("Укажите код набора.")
+    base = (base or "").strip() or config.DATASET_API_URL
     if not base:
-        raise DatasetError("DATASET_API_URL не задан. Укажите адрес API в .env или в форме импорта.")
-    if "{group_id}" in base:
-        return base.replace("{group_id}", group_id)
-    p = urlparse(base)
+        raise DatasetError("Вставьте ссылку на API из гайда организаторов.")
+    has_placeholder = "{group_id}" in base
+    if has_placeholder:
+        base = base.replace("{group_id}", quote(group_id, safe=""))
+    try:
+        p = urlparse(base)
+        if p.scheme not in ("http", "https") or not p.hostname or p.username is not None:
+            raise ValueError
+        _ = p.port
+    except ValueError:
+        raise DatasetError("Проверьте ссылку на API. Она должна начинаться с https:// или http://.") from None
+    if has_placeholder:
+        return base
     q = [(k, v) for k, v in parse_qsl(p.query, keep_blank_values=True) if k != "group_id"]
     q.append(("group_id", group_id))
     return urlunparse(p._replace(query=urlencode(q)))
@@ -27,14 +38,21 @@ def build_url(group_id: str, base: str | None = None) -> str:
 
 async def fetch_group(group_id: str, base: str | None = None) -> tuple[str, list[dict]]:
     url = build_url(group_id, base)
-    async with httpx.AsyncClient(timeout=60, follow_redirects=True) as c:
-        r = await c.get(url)
+    try:
+        async with httpx.AsyncClient(timeout=60, follow_redirects=True) as c:
+            r = await c.get(url)
+    except httpx.TimeoutException:
+        raise DatasetError("API организаторов не ответил вовремя. Попробуйте ещё раз.") from None
+    except (httpx.RequestError, httpx.InvalidURL):
+        raise DatasetError("Не удалось подключиться к API организаторов. Проверьте ссылку.") from None
     if r.status_code != 200:
-        raise DatasetError(f"API вернул HTTP {r.status_code}: {r.text[:300]}")
+        raise DatasetError(f"API организаторов вернул HTTP {r.status_code}. Проверьте код набора и ссылку.")
     try:
         payload = r.json()
-    except ValueError as e:
-        raise DatasetError(f"API вернул не JSON: {r.text[:300]}") from e
+    except ValueError:
+        raise DatasetError("API организаторов вернул ответ в неожиданном формате.") from None
+    if isinstance(payload, dict) and payload.get("isSuccess") is False:
+        raise DatasetError("API организаторов не выдал набор. Проверьте код набора и доступ к нему.")
     return extract_records(payload, default_group=group_id)
 
 

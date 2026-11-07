@@ -1,12 +1,11 @@
-// Conversation card: transcript (chat), call player with a speaker timeline, and
-// the evaluation panel (score ring, why the score dropped, criteria, appeals).
+// Conversation card: transcript, recording, evaluation and appeals.
 // Deep link: #/conversation/<id>?eval=<id>&crit=<criterionId>&msg=<n>
 import { api } from "../api.js";
-import { esc, $, $$, fmtNum, fmtDate, toast, busy, modal, answerView, tsSeconds, fmtClock, LANG, CHANNEL } from "../util.js";
+import { esc, $, $$, fmtNum, fmtDate, toast, busy, modal, answerView, tsSeconds, fmtClock, LANG, CHANNEL, icon } from "../util.js";
 import { refreshBadge } from "../app.js";
 import { createPlayer, buildSegments, audioTimeline } from "../card/player.js";
 import { msgHtml, scrollInBox } from "../card/transcript.js";
-import { ringHtml, critHtml, lossesHtml, metaHtml, loadingHtml, updateLoading, firstRef, plural, isRevised } from "../card/score.js";
+import { critHtml, lossesHtml, lossItems, shortReason, metaHtml, loadingHtml, updateLoading, firstRef, plural, isRevised, changeReview } from "../card/score.js";
 
 let ctx = null;
 
@@ -16,6 +15,7 @@ const FILTERS = [
   { key: "operator", label: "Оператор" },
   { key: "ctx", label: "Бот · система" },
 ];
+const OVERVIEW_CRITERIA = new Set(["c01", "c03", "c07"]);
 
 export async function render(root, params, query) {
   const [conv, checklists] = await Promise.all([api.conversation(params.id), api.checklists()]);
@@ -26,7 +26,9 @@ export async function render(root, params, query) {
   const known = seconds.filter((s) => s !== null && s !== undefined);
   const duration = known.length ? Math.max(...known) : null;
   const isCall = conv.channel === "voice call" || !!conv.audio_url;
-  const active = checklists.find((c) => c.is_active) || checklists[0];
+  const history = conv.evaluations.find((ev) => ev.id === Number(query.eval)) || conv.evaluations[0];
+  const selected = checklists.find((c) => c.id === Number(query.checklist))
+    || checklists.find((c) => c.is_active) || checklists[0];
   const hasCtx = conv.transcript.some((m) => !["client", "operator"].includes(String(m.speaker || "").toLowerCase()));
 
   // For calls, message positions are in recording time (start / cut pause / lead), not transcript time.
@@ -34,7 +36,8 @@ export async function render(root, params, query) {
   const audioSec = isCall && conv.audio_url ? audioTimeline(conv.transcript, seconds, null) : seconds;
   ctx = {
     root, conv, checklists, seconds: audioSec, isCall, evaluation: null, player: null,
-    openCrit: query.crit || null, whyExpanded: false, followUntil: 0, loadingTimer: null, pollTimer: null,
+    openCrit: query.crit || null, compareId: Number(query.compare) || null,
+    whyExpanded: false, followUntil: 0, loadingTimer: null, pollTimer: null,
     rel: isCall ? clock(audioSec) : null,
   };
   const mine = ctx;
@@ -45,38 +48,44 @@ export async function render(root, params, query) {
     if (ctx === mine) ctx = null;
   };
 
-  const chan = CHANNEL[conv.channel] || conv.channel || "";
+  const chan = CHANNEL[conv.channel] || (isCall ? "Звонок" : conv.channel || "Диалог");
+  const started = /^\d{4}-\d{2}-\d{2}T/.test(first || "") ? new Date(first) : null;
+  const date = started && Number.isFinite(started.valueOf())
+    ? started.toLocaleString("ru-RU", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) : "";
   root.innerHTML = `
-    <div class="crumbs"><a href="#/conversations">Диалоги</a> / ${esc(conv.dataset_group || "")}</div>
+    <div class="crumbs cv-back"><a href="#/conversations">${icon("back")}Все разговоры</a></div>
     <div class="page-head cv-head">
       <div class="cv-head-main">
-        <h1>Анализ разговора</h1>
+        <h1>${esc(conv.title?.trim() || (isCall ? "Разбор звонка" : "Разбор чата"))}</h1>
         <div class="cv-head-sub">
-          <span class="cv-chip cv-chip-${isCall ? "call" : "chat"}">${isCall ? "🎧" : "💬"} ${esc(chan)}</span>
-          <span class="mono">${esc(conv.id)}</span>
+          <span>${esc(chan)} №${esc(conv.id)}</span>
+          ${date ? `<span>${esc(date)}</span>` : ""}
           ${conv.language ? `<span>${esc(LANG[conv.language] || conv.language)}</span>` : ""}
-          ${duration ? `<span>${fmtClock(duration)}</span>` : ""}
-          <span>${conv.transcript.length} ${plural(conv.transcript.length, "реплика", "реплики", "реплик")}</span>
+          ${!date && isCall && duration ? `<span>${fmtClock(duration)}</span>` : ""}
         </div>
       </div>
-      <div class="spacer"></div>
       <div class="cv-eval-ctl">
         <label class="cv-sr" for="sel-checklist">Чек-лист</label>
         <select class="input" id="sel-checklist">
-          ${checklists.map((c) => `<option value="${c.id}" ${c.id === active?.id ? "selected" : ""}>${esc(c.name)} · v${c.version}${c.is_active ? " (активный)" : ""}</option>`).join("")}
+          ${checklists.map((c) => `<option value="${c.id}" ${c.id === selected?.id ? "selected" : ""}>v${c.version} · ${esc(c.name)}${c.is_active ? " (активный)" : ""}</option>`).join("")}
         </select>
-        <button class="btn btn-primary" id="btn-eval" type="button">Оценить</button>
+        <a class="btn" id="cv-edit-checklist">${icon("list")}Изменить чек-лист</a>
+        <button class="btn btn-primary" id="btn-eval" type="button">${history ? "Переоценить диалог" : "Оценить диалог"}</button>
       </div>
     </div>
-    ${isCall ? `<div id="cv-player-host"></div>` : ""}
+    <div id="cv-version-ready" class="qa-handoff" hidden></div>
     <div class="cv-grid">
       <section class="card cv-tr-card" aria-label="Расшифровка">
         <div class="card-head cv-tr-head">
-          <h2>Расшифровка</h2><div class="spacer"></div>
-          <div class="cv-filter" role="group" aria-label="Фильтр по участнику">
-            ${FILTERS.filter((f) => f.key !== "ctx" || hasCtx).map((f) => `<button type="button" data-filter="${f.key}" aria-pressed="${f.key === "all"}">${esc(f.label)}</button>`).join("")}
-          </div>
+          <h2>${isCall ? "Запись и расшифровка" : "Переписка"}</h2><div class="spacer"></div>
+          <details class="cv-filter-menu">
+            <summary aria-label="Фильтр реплик">${icon("filter")}<span>Реплики</span></summary>
+            <div class="cv-filter" role="group" aria-label="Фильтр по участнику">
+              ${FILTERS.filter((f) => f.key !== "ctx" || hasCtx).map((f) => `<button type="button" data-filter="${f.key}" aria-pressed="${f.key === "all"}">${esc(f.label)}</button>`).join("")}
+            </div>
+          </details>
         </div>
+        ${isCall ? `<div id="cv-player-host"></div>` : ""}
         <div class="cv-tr-ctx" id="cv-tr-ctx" hidden></div>
         <div class="cv-transcript" id="transcript" data-filter="all" tabindex="0" aria-label="Реплики диалога">
           ${conv.transcript.map((m, i) => msgHtml(m, i + 1, { sec: audioSec[i], playable: isCall && !!conv.audio_url })).join("")}
@@ -100,11 +109,17 @@ export async function render(root, params, query) {
     const el = $(".cv-msg.is-playing", root);
     if (el) scrollInBox(tr, el);
   });
-  $$("[data-filter]", root).forEach((b) => b.addEventListener("click", () => setFilter(b.dataset.filter)));
+  $$("[data-filter]", root).forEach((b) => b.addEventListener("click", () => {
+    setFilter(b.dataset.filter);
+    b.closest("details").open = false;
+    b.closest("details").querySelector("summary").focus();
+  }));
   $("#cv-tr-ctx", root).addEventListener("click", (e) => {
     if (e.target.closest("[data-clear]")) toggleCrit(ctx.openCrit);
   });
   $("#btn-eval", root).addEventListener("click", (e) => runEvaluation(e.currentTarget));
+  $("#sel-checklist", root).addEventListener("change", updateChecklistControls);
+  updateChecklistControls();
 
   if (isCall) {
     const mineCtx = ctx;
@@ -118,6 +133,10 @@ export async function render(root, params, query) {
         const sec = audioTimeline(conv.transcript, seconds, duration);
         mineCtx.seconds = sec;
         mineCtx.rel = clock(sec);
+        $$('[data-cv-ref]', root).forEach((b) => {
+          const time = mineCtx.rel[Number(b.dataset.cvRef) - 1];
+          b.textContent = time ? `К реплике на ${time}` : `К реплике №${b.dataset.cvRef}`;
+        });
         $$("[data-play]", root).forEach((b) => {
           const s = sec[Number(b.dataset.play) - 1];
           if (s === null || s === undefined) return;
@@ -131,8 +150,7 @@ export async function render(root, params, query) {
     });
   }
 
-  const evId = query.eval ? Number(query.eval) : conv.evaluations[0]?.id;
-  if (evId) await loadEvaluation(evId);
+  if (history) await loadEvaluation(history.id);
   else drawEmpty();
   if (ctx === mine && query.msg) focusMsg(Number(query.msg));
   return cleanup;
@@ -141,9 +159,16 @@ export async function render(root, params, query) {
 export function onQuery(query) {
   if (!ctx) return;
   const go = async () => {
-    if (query.eval && Number(query.eval) !== ctx.evaluation?.id) {
+    const kid = Number(query.checklist);
+    if (ctx.checklists.some((c) => c.id === kid)) {
+      $("#sel-checklist", ctx.root).value = String(kid);
+      updateChecklistControls();
+    }
+    const id = Number(query.eval);
+    if (id !== ctx.evaluation?.id && ctx.conv.evaluations.some((ev) => ev.id === id)) {
       ctx.openCrit = query.crit || null;
-      await loadEvaluation(Number(query.eval));
+      ctx.compareId = Number(query.compare) || null;
+      await loadEvaluation(id);
     } else if (query.crit && query.crit !== ctx.openCrit) {
       toggleCrit(query.crit, true, { focus: !query.msg });
     }
@@ -209,27 +234,56 @@ function karaoke(n, isPlaying) {
   else follow.hidden = false;
 }
 
-function markEvidence(row, crit) {
+function markEvidence(row, crit, { announce = true } = {}) {
   $$(".cv-msg.is-evidence, .cv-msg.in-range", ctx.root).forEach((m) => m.classList.remove("is-evidence", "in-range"));
   const bar = $("#cv-tr-ctx", ctx.root);
+  const original = row && ctx.evaluation?.criteria?.find((r) => r.criterion_id === row.criterion_id);
+  const revised = isRevised(row, original);
+  $(".cv-tr-card", ctx.root).classList.toggle("is-critical-evidence", !revised && crit?.type === "critical" && row?.answer === "yes");
   const range = [];
-  if (row && row.checked_range) for (let n = row.checked_range[0]; n <= row.checked_range[1]; n++) range.push(n);
+  if (row?.checked_range && (announce || !row.evidence?.length)) {
+    for (let n = row.checked_range[0]; n <= row.checked_range[1]; n++) range.push(n);
+  }
   if (row) {
     (row.evidence || []).forEach((n) => $(`#msg-${n}`, ctx.root)?.classList.add("is-evidence"));
     range.forEach((n) => $(`#msg-${n}`, ctx.root)?.classList.add("in-range"));
   }
   if (ctx.player) ctx.player.setMarks({ evidence: row ? row.evidence || [] : [], range, focus: null });
-  if (!row || !crit) { bar.hidden = true; bar.innerHTML = ""; return; }
-  const ev = (row.evidence || []).length;
+  const ev = row?.evidence?.length || 0;
+  if (!crit || !announce || (!ev && !range.length)) { bar.hidden = true; bar.innerHTML = ""; return; }
   bar.hidden = false;
   bar.innerHTML = `
     <span class="cv-tr-ctx-dot" aria-hidden="true"></span>
-    <span class="cv-tr-ctx-text">${ev ? `Подсвечено ${ev} ${plural(ev, "доказательство", "доказательства", "доказательств")}` : "Подсвечен проверенный участок"} по критерию
+    <span class="cv-tr-ctx-text">${revised ? "Фрагменты из оценки модели" : ev ? `Подсвечено ${ev} ${plural(ev, "доказательство", "доказательства", "доказательств")}` : "Подсвечен проверенный участок"} по критерию
       <b>${crit.code ? esc(crit.code) + " " : ""}${esc(crit.title)}</b>${range.length ? ` · участок #${range[0]}–#${range[range.length - 1]}` : ""}</span>
     <button type="button" class="cv-x" data-clear aria-label="Снять подсветку">✕</button>`;
 }
 
 // ------------------------------------------------------------ evaluation ----
+
+function updateChecklistControls() {
+  const kid = Number($("#sel-checklist", ctx.root).value);
+  const cl = ctx.checklists.find((item) => item.id === kid);
+  const edit = $("#cv-edit-checklist", ctx.root);
+  edit.hidden = !cl;
+  if (cl) {
+    const q = new URLSearchParams({ conversation: ctx.conv.id });
+    if (ctx.evaluation) q.set("eval", ctx.evaluation.id);
+    edit.href = `#/checklists/${cl.id}?${q}`;
+  }
+  const ready = $("#cv-version-ready", ctx.root);
+  const ev = ctx.evaluation;
+  const changed = cl && ev?.status === "done" && ev.checklist_id !== kid;
+  const canCheckRule = changed && cl.name === ev.checklist_name && cl.version > ev.checklist_version;
+  const ruleCheckQuery = canCheckRule ? new URLSearchParams({
+    baseline: ev.checklist_id, ...(ctx.openCrit ? { criterion: ctx.openCrit } : {}),
+  }) : null;
+  ready.hidden = !changed;
+  ready.innerHTML = changed ? `<span class="qa-handoff-icon">${icon("refresh")}</span>
+    <div><b>Выбрана другая версия чек-листа · v${esc(cl.version)}</b>
+    <div>Нажмите «Переоценить диалог», чтобы применить её к этому разговору.</div></div>
+    ${canCheckRule ? `<a class="btn btn-sm" href="#/checklists/${kid}/rule-check?${esc(String(ruleCheckQuery))}">Проверить правило</a>` : ""}` : "";
+}
 
 function panelHead(ev) {
   const hist = ctx.conv.evaluations;
@@ -240,7 +294,7 @@ function panelHead(ev) {
         <select class="input cv-hist" id="sel-eval">
           ${hist.map((h) => `<option value="${h.id}" ${ev && h.id === ev.id ? "selected" : ""}>#${h.id} · ${esc(h.checklist_name)} v${h.checklist_version} · ${esc(fmtDate(h.created_at))}${h.status === "error" ? " · ошибка" : h.final_total !== null && h.final_total !== undefined ? ` · ${fmtNum(h.final_total)}` : ""}</option>`).join("")}
         </select>`
-      : ev ? `<span class="cv-muted-s">${esc(ev.checklist_name)} · v${ev.checklist_version}</span>` : ""}
+      : ""}
     </div>`;
 }
 
@@ -280,13 +334,17 @@ async function runEvaluation(btn) {
   sel.disabled = true;
   startLoading(null);
   const mine = ctx;
+  const previous = ctx.evaluation;
   try {
     const ev = await api.evaluate(ctx.conv.id, kid);
     if (ctx !== mine) return;
-    ctx.conv = { ...ctx.conv, evaluations: (await api.conversation(ctx.conv.id)).evaluations };
-    history.replaceState(null, "", `#/conversation/${encodeURIComponent(ctx.conv.id)}?eval=${ev.id}`);
+    const updated = await api.conversation(mine.conv.id);
+    if (ctx !== mine) return;
+    ctx.conv = { ...ctx.conv, evaluations: updated.evaluations };
+    ctx.compareId = previous?.status === "done" && previous.checklist_id !== ev.checklist_id ? previous.id : null;
     ctx.openCrit = null;
     drawEvaluation(ev);
+    setUrl();
     if (ev.status === "error") toast(`Ошибка оценки: ${ev.error}`, true);
     else toast(`Оценка готова: ${fmtNum(ev.final_total)} из 100`);
   } catch (e) {
@@ -294,7 +352,11 @@ async function runEvaluation(btn) {
     toast(e.message, true);
     if (ctx.evaluation) drawEvaluation(ctx.evaluation); else drawEmpty();
   } finally {
-    if (ctx === mine) { busy(btn, false); sel.disabled = false; }
+    if (ctx === mine) {
+      busy(btn, false);
+      if (ctx.evaluation) btn.textContent = "Переоценить диалог";
+      sel.disabled = false;
+    }
   }
 }
 
@@ -308,6 +370,9 @@ async function loadEvaluation(id) {
 
 function drawEvaluation(ev) {
   ctx.evaluation = ev;
+  const btn = $("#btn-eval", ctx.root);
+  if (!btn.disabled) btn.textContent = "Переоценить диалог";
+  updateChecklistControls();
   clearTimeout(ctx.pollTimer);
   const panel = $("#eval-panel", ctx.root);
 
@@ -340,70 +405,74 @@ function drawEvaluation(ev) {
   const resolved = ev.appeals.filter((a) => a.status !== "open").length;
   const openApp = ev.appeals.filter((a) => a.status === "open").length;
   const delta = totalChanged ? Number(ev.final_total) - Number(ev.total) : 0;
+  const previous = ctx.conv.evaluations.find((item) => item.id === ctx.compareId && item.id !== ev.id && item.status === "done");
   const rowsBy = Object.fromEntries(ev.final_criteria.map((r) => [r.criterion_id, r]));
 
-  // Criteria grouped by checklist section, in checklist order.
-  const sectionTitle = Object.fromEntries((cfg.sections || []).map((s) => [s.id, s.title]));
-  const secScore = Object.fromEntries((score.sections || []).map((s) => [s.section_id, s]));
-  const groups = [];
-  cfg.criteria.forEach((c) => {
-    if (!rowsBy[c.id]) return;
-    let g = groups.find((x) => x.id === (c.section || ""));
-    if (!g) groups.push((g = { id: c.section || "", items: [] }));
-    g.items.push(c);
+  const criteria = cfg.criteria.filter((c) => rowsBy[c.id]);
+  const reviewCriteria = criteria.filter((c) => rowsBy[c.id].evidence_review);
+  const critical = criteria.filter((c) => c.type === "critical" && rowsBy[c.id].answer === "yes")
+    .map((crit) => ({ crit, row: rowsBy[crit.id] }));
+  const losses = lossItems(ev, critCfg, scoreRows);
+  const findings = critical.length ? critical : losses.slice(0, 1);
+  const canAppeal = criteria.some((c) => !(appealsBy[c.id] || []).some((a) => a.status === "open"));
+  const overview = criteria.length <= 4 ? criteria : [...criteria]
+    .sort((a, b) => Number(!!rowsBy[b.id].evidence_review) - Number(!!rowsBy[a.id].evidence_review)
+      || Number(OVERVIEW_CRITERIA.has(b.id)) - Number(OVERVIEW_CRITERIA.has(a.id))).slice(0, 3);
+  const moreCriteria = criteria.filter((c) => !overview.includes(c));
+  const criterionRow = (c) => critHtml({
+    row: rowsBy[c.id], crit: c, srow: scoreRows[c.id], orow: origRows[c.id], appeals: appealsBy[c.id] || [],
+    msgs: ctx.conv.transcript, rel: ctx.rel, canAppeal: true, open: ctx.openCrit === c.id,
   });
 
-  const critical = score.critical
-    ? `<div class="cv-banner is-crit" role="alert">
-        <span class="cv-banner-ic" aria-hidden="true">!</span>
-        <div><b>Грубая ошибка</b> — отмечается отдельно от балла
-          <div class="cv-banner-list">${score.critical_criteria.map((id) => `<button type="button" class="cv-link" data-open="${esc(id)}">${esc(critCfg[id]?.title || id)}</button>`).join(", ")}</div></div>
-      </div>`
-    : `<div class="cv-banner is-ok"><span class="cv-banner-ic" aria-hidden="true">✓</span>Грубых ошибок не выявлено</div>`;
-
   panel.innerHTML = panelHead(ev) + `
+    <div class="cv-ev-content">
     <div class="cv-score">
-      ${ringHtml(score.total)}
-      <div class="cv-score-side">
-        <div class="cv-score-cap">${totalChanged ? "Итог после пересмотра" : "Итоговая оценка"}</div>
-        ${totalChanged ? `
-          <div class="cv-revised">
-            <span class="cv-revised-was" title="Исходная оценка модели">${fmtNum(ev.total)}</span>
-            <span aria-hidden="true">→</span>
-            <b>${fmtNum(ev.final_total)}</b>
-            <span class="cv-delta ${delta > 0 ? "is-up" : "is-down"}">${delta > 0 ? "+" : "−"}${fmtNum(Math.abs(delta))}</span>
-          </div>
-          <div class="cv-muted-s">Исходная оценка модели: ${fmtNum(ev.total)} · решений по апелляциям: ${resolved}</div>`
+      <div class="cv-score-line"><strong>${fmtNum(score.total)}</strong>${score.total === null ? "" : "<span>из 100 баллов</span>"}</div>
+      ${totalChanged ? `<div class="cv-revised"><span>До пересмотра ${fmtNum(ev.total)}</span>
+        <span class="cv-delta ${delta > 0 ? "is-up" : "is-down"}">${delta > 0 ? "+" : "−"}${fmtNum(Math.abs(delta))}</span></div>`
         : resolved ? `<div class="cv-muted-s">Апелляции рассмотрены (${resolved}), итог не изменился</div>` : ""}
-        ${openApp ? `<div class="cv-muted-s"><span class="cv-tag is-warn">${openApp} ${plural(openApp, "апелляция", "апелляции", "апелляций")} на рассмотрении</span></div>` : ""}
-        ${score.total === null ? `<div class="cv-note cv-note-na">Итог не рассчитывается: нет применимых критериев с весом.</div>` : ""}
-        <div class="cv-secs">
-          ${(score.sections || []).filter((s) => s.max_points !== null).map((s) => {
-            const pct = s.max_points ? (s.points / s.max_points) * 100 : 0;
-            return `<div class="cv-sec"><span>${esc(s.title)}</span><b>${fmtNum(s.points)} / ${fmtNum(s.max_points)}</b>
-              <div class="cv-bar cv-tone-${pct >= 85 ? "hi" : pct >= 65 ? "mid" : "lo"}"><i style="width:${pct.toFixed(1)}%"></i></div></div>`;
-          }).join("")}
-        </div>
-      </div>
+      ${openApp ? `<div class="cv-muted-s">${openApp} ${plural(openApp, "апелляция", "апелляции", "апелляций")} на рассмотрении</div>` : ""}
+      ${score.total === null ? `<div class="cv-note cv-note-na">Итог не рассчитывается: нет применимых критериев с весом.</div>` : ""}
     </div>
-    ${critical}
-    <div id="cv-why">${lossesHtml({ ev, critCfg, scoreRows, appealsBy, expanded: ctx.whyExpanded })}</div>
-    ${ev.summary ? `<div class="cv-summary"><span class="cv-summary-h">Резюме модели${ev.final_criteria.some((r) => isRevised(r, origRows[r.criterion_id])) ? " · до пересмотра" : ""}</span>${esc(ev.summary)}</div>` : ""}
+    ${reviewCriteria.length ? `<div class="cv-evidence-banner">
+      ${icon("alert")}
+      <div><strong>Требует проверки</strong><span>Сверьте основания по ${reviewCriteria.length} ${plural(reviewCriteria.length, "критерию", "критериям", "критериям")}.</span></div>
+      <button type="button" class="btn btn-sm" data-open="${esc(reviewCriteria[0].id)}">Проверить</button>
+    </div>` : ""}
+    ${previous ? `<div class="cv-version-compare">
+      <div><b>Оценки модели по двум версиям</b><span>Один и тот же диалог</span></div>
+      <div class="cv-version-values"><span><small>v${esc(previous.checklist_version)}</small><strong>${fmtNum(previous.total)}</strong></span>
+      <span aria-hidden="true">→</span><span><small>v${esc(ev.checklist_version)}</small><strong>${fmtNum(ev.total)}</strong></span></div>
+    </div>` : ""}
+    ${findings.map(({ crit, row, loss }) => {
+      const id = esc(crit.id);
+      const decision = changeReview(row, origRows[crit.id]);
+      const ref = decision ? null : firstRef(row);
+      const clock = ctx.rel?.[ref - 1];
+      const reason = decision ? `<b>Решение проверяющего</b> · ${esc(decision.reason)}` : esc(shortReason(crit, row));
+      return `<section class="cv-finding ${crit.type === "critical" ? "is-critical" : ""}">
+        <span class="cv-finding-label">${crit.type === "critical" ? "Грубое нарушение" : `Снижение оценки · −${fmtNum(loss)} балл.`}</span>
+        <h3><button type="button" data-open="${id}">${esc(crit.title)}</button></h3>
+        ${reason ? `<p>${reason}</p>` : ""}
+        ${ref ? `<button type="button" class="btn btn-primary cv-finding-jump" data-jump="${id}" data-cv-ref="${ref}">${clock ? `К реплике на ${clock}` : `К реплике №${ref}`}</button>` : ""}
+      </section>`;
+    }).join("")}
+    ${findings.length ? "" : `<p class="cv-no-finding">Грубых нарушений не выявлено</p>`}
     <div class="cv-crits" id="crit-list">
-      <div class="cv-crits-h"><h3>Критерии</h3><span class="cv-muted-s">нажмите, чтобы увидеть объяснение и реплики</span></div>
-      ${groups.map((g) => {
-        const ss = secScore[g.id];
-        return `<div class="cv-group">
-          <div class="cv-group-h"><span>${esc(sectionTitle[g.id] || ss?.title || "")}</span>
-            ${ss ? `<span>${ss.max_points !== null ? `${fmtNum(ss.points)} / ${fmtNum(ss.max_points)}` : g.items.every((c) => rowsBy[c.id].answer === "na") ? "все N/A — вес перераспределён" : "без баллов"}</span>` : ""}</div>
-          ${g.items.map((c) => critHtml({
-            row: rowsBy[c.id], crit: c, srow: scoreRows[c.id], orow: origRows[c.id], appeals: appealsBy[c.id] || [],
-            msgs: ctx.conv.transcript, rel: ctx.rel, canAppeal: true, open: ctx.openCrit === c.id,
-          })).join("")}
-        </div>`;
-      }).join("")}
+      <h3>Критерии проверки</h3>
+      ${overview.map(criterionRow).join("")}
+      ${moreCriteria.length ? `<details class="cv-more-criteria" ${previous ? "open" : ""}><summary>Остальные критерии (${moreCriteria.length})</summary>${moreCriteria.map(criterionRow).join("")}</details>` : ""}
     </div>
-    ${metaHtml(ev)}`;
+    <button type="button" class="btn cv-appeal-main" data-appeal-all ${canAppeal ? "" : "disabled"}>Оспорить оценку</button>
+    <details class="cv-score-details">
+      <summary>Подробнее об оценке</summary>
+      ${ev.summary ? `<div class="cv-summary"><span class="cv-summary-h">Резюме модели${ev.final_criteria.some((r) => isRevised(r, origRows[r.criterion_id])) ? " · до пересмотра" : ""}</span>${esc(ev.summary)}</div>` : ""}
+      <div id="cv-why">${lossesHtml({ ev, critCfg, scoreRows, appealsBy, expanded: ctx.whyExpanded })}</div>
+      <div class="cv-secs">${(score.sections || []).filter((s) => s.max_points !== null).map((s) =>
+        `<div class="cv-sec"><span>${esc(s.title)}</span><b>${fmtNum(s.points)} / ${fmtNum(s.max_points)}</b></div>`).join("")}</div>
+      ${metaHtml(ev)}
+    </details>
+    </div>`;
 
   bindHistory();
   panel.onclick = onPanelClick;
@@ -413,13 +482,17 @@ function drawEvaluation(ev) {
     const el = $(`.cv-crit[data-crit="${CSS.escape(ctx.openCrit)}"]`, ctx.root);
     if (el) requestAnimationFrame(() => el.scrollIntoView({ block: "nearest", behavior: "smooth" }));
   }
-  else markEvidence(null);
+  else if (findings.length) {
+    const { row, crit } = findings[0];
+    markEvidence(isRevised(row, origRows[crit.id]) ? null : row, crit, { announce: false });
+  } else markEvidence(null);
 }
 
 function onPanelClick(e) {
   const t = e.target;
   const msg = t.closest("[data-msg]");
   if (msg) { focusMsg(Number(msg.dataset.msg), { page: true }); return; }
+  if (t.closest("[data-appeal-all]")) { appealDialog(); return; }
   const ap = t.closest("[data-appeal]");
   if (ap) { appealDialog(ap.dataset.appeal); return; }
   const jump = t.closest("[data-jump]");
@@ -450,6 +523,7 @@ function bindHistory() {
   if (sel) sel.addEventListener("change", () => {
     history.replaceState(null, "", `#/conversation/${encodeURIComponent(ctx.conv.id)}?eval=${sel.value}`);
     ctx.openCrit = null;
+    ctx.compareId = null;
     loadEvaluation(Number(sel.value)).catch((e) => toast(e.message, true));
   });
 }
@@ -458,6 +532,9 @@ function setUrl() {
   const ev = ctx.evaluation;
   if (!ev) return;
   const q = new URLSearchParams({ eval: String(ev.id) });
+  const kid = Number($("#sel-checklist", ctx.root).value);
+  if (kid && (kid !== ev.checklist_id || ctx.compareId)) q.set("checklist", kid);
+  if (ctx.compareId) q.set("compare", ctx.compareId);
   if (ctx.openCrit) q.set("crit", ctx.openCrit);
   history.replaceState(null, "", `#/conversation/${encodeURIComponent(ctx.conv.id)}?${q.toString()}`);
 }
@@ -473,6 +550,8 @@ function toggleCrit(id, forceOpen = false, { focus = true, page = false } = {}) 
     c.querySelector(".cv-crit-body").hidden = true;
   });
   if (willOpen) {
+    const rest = el.closest(".cv-more-criteria");
+    if (rest) rest.open = true;
     el.classList.add("is-open");
     el.querySelector(".cv-crit-top").setAttribute("aria-expanded", "true");
     el.querySelector(".cv-crit-body").hidden = false;
@@ -492,19 +571,26 @@ function toggleCrit(id, forceOpen = false, { focus = true, page = false } = {}) 
 
 function appealDialog(critId) {
   const ev = ctx.evaluation;
-  const crit = ev.checklist.criteria.find((c) => c.id === critId);
-  const row = ev.final_criteria.find((r) => r.criterion_id === critId);
-  const srow = ev.final_score.criteria.find((r) => r.criterion_id === critId);
-  const av = answerView(crit, row.answer);
-  modal({
-    title: `Оспорить оценку: ${crit.code ? crit.code + " " : ""}${crit.title}`,
+  const rows = new Map(ev.final_criteria.map((row) => [row.criterion_id, row]));
+  const pending = new Set(ev.appeals.filter((a) => a.status === "open").map((a) => a.criterion_id));
+  const choices = ev.checklist.criteria.filter((c) => rows.has(c.id) && !pending.has(c.id) && (!critId || c.id === critId));
+  if (!choices.length) return;
+  const summary = (crit) => {
+    const row = rows.get(crit.id);
+    const score = ev.final_score.criteria.find((r) => r.criterion_id === crit.id);
+    const original = ev.criteria.find((r) => r.criterion_id === crit.id);
+    const decision = changeReview(row, original);
+    return `<b>Текущая оценка: ${esc(answerView(crit, row.answer).label)}</b>
+      ${score?.points != null ? ` · ${fmtNum(score.points)} / ${fmtNum(score.max_points)} балл.` : ""}
+      <div class="cv-muted-s">${decision ? `Решение проверяющего · ${esc(decision.reason)}` : esc(row.explanation || "")}</div>`;
+  };
+  const { el } = modal({
+    title: critId ? `Оспорить оценку: ${choices[0].title}` : "Оспорить оценку",
     submitText: "Подать апелляцию",
     body: `
-      <div class="cv-ap-cur">
-        <span class="cv-ic cv-k-${row.answer === "na" ? "na" : av.kind}" aria-hidden="true">${esc(row.answer === "na" ? "N/A" : av.icon)}</span>
-        <div><b>Текущая оценка: ${esc(av.label)}</b>${srow && srow.points !== null && srow.points !== undefined ? ` · ${fmtNum(srow.points)} / ${fmtNum(srow.max_points)} балл.` : ""}
-          <div class="cv-muted-s">${esc(row.explanation || "")}</div></div>
-      </div>
+      ${critId ? "" : `<label class="field">Критерий
+        <select class="input" id="ap-criterion">${choices.map((c) => `<option value="${esc(c.id)}">${esc(c.title)}</option>`).join("")}</select></label>`}
+      <div class="cv-ap-cur" id="ap-summary">${summary(choices[0])}</div>
       <label class="field">Комментарий — почему оценка неверна
         <textarea class="input" id="ap-comment" rows="4" placeholder="Например: оператор представился в реплике #3, приветствие было на казахском"></textarea></label>
       <label class="field">Автор (необязательно)
@@ -513,12 +599,16 @@ function appealDialog(critId) {
     onSubmit: async (el) => {
       const comment = $("#ap-comment", el).value.trim();
       if (!comment) throw new Error("Добавьте комментарий");
-      const a = await api.createAppeal({ evaluation_id: ev.id, criterion_id: critId, comment, author: $("#ap-author", el).value.trim() || null });
+      const selected = $("#ap-criterion", el)?.value || choices[0].id;
+      const a = await api.createAppeal({ evaluation_id: ev.id, criterion_id: selected, comment, author: $("#ap-author", el).value.trim() || null });
       toast(`Апелляция #${a.id} отправлена проверяющему`);
-      if (!ctx) return;
-      ctx.openCrit = critId;
+      if (ctx?.evaluation?.id !== ev.id) return;
+      ctx.openCrit = selected;
       await loadEvaluation(ev.id);
       refreshBadge();
     },
+  });
+  $("#ap-criterion", el)?.addEventListener("change", (e) => {
+    $("#ap-summary", el).innerHTML = summary(choices.find((c) => c.id === e.target.value));
   });
 }

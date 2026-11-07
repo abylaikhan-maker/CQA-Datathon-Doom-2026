@@ -57,8 +57,15 @@ export const api = {
   checklists: () => req("GET", "/api/checklists"),
   checklist: (id) => req("GET", `/api/checklists/${id}`),
   activeChecklist: () => req("GET", "/api/checklists/active"),
-  saveChecklist: (config, note, activate = true) => req("POST", "/api/checklists", { config, note, activate }),
+  saveChecklist: (config, note, activate = true, source_appeal_id = null) =>
+    req("POST", "/api/checklists", { config, note, activate, source_appeal_id }),
   activateChecklist: (id) => req("POST", `/api/checklists/${id}/activate`),
+  ruleExamples: (id, criterion_id) => req("GET", `/api/checklists/${id}/rule-examples` + qs({ criterion_id })),
+  addRuleExample: (id, body) => req("POST", `/api/checklists/${id}/rule-examples`, body),
+  removeRuleExample: (id, criterion_id, conversation_id) =>
+    req("DELETE", `/api/checklists/${id}/rule-examples` + qs({ criterion_id, conversation_id })),
+  ruleCheck: (id, criterion_id) => req("GET", `/api/checklists/${id}/rule-check` + qs({ criterion_id })),
+  runRuleCheck: (id, body) => req("POST", `/api/checklists/${id}/rule-check`, body),
 
   evaluate: (conversation_id, checklist_id) => req("POST", "/api/evaluations", { conversation_id, checklist_id }),
   evaluation: (id) => req("GET", `/api/evaluations/${id}`),
@@ -69,6 +76,7 @@ export const api = {
   appeals: (status) => req("GET", "/api/appeals" + qs({ status })),
   appeal: (id) => req("GET", `/api/appeals/${id}`),
   createAppeal: (body) => req("POST", "/api/appeals", body),
+  saveAppealCase: (id, body) => req("PATCH", `/api/appeals/${id}/case`, body),
   decide: (id, body) => req("POST", `/api/appeals/${id}/decision`, body),
 
   stats: (params = {}) => req("GET", "/api/stats" + qs(params)),

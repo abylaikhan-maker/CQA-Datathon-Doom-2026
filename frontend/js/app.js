@@ -6,15 +6,17 @@ import { esc, $$ } from "./util.js";
 import * as conversations from "./views/conversations.js";
 import * as card from "./views/card.js";
 import * as checklists from "./views/checklists.js";
+import * as ruleCheck from "./views/rule-check.js";
 import * as appeals from "./views/appeals.js";
 import * as analytics from "./views/analytics.js";
 import * as accuracy from "./views/accuracy.js";
 
 const routes = [
-  { re: /^\/conversations$/, view: conversations, nav: "conversations", title: "Диалоги", skel: "list" },
+  { re: /^\/conversations$/, view: conversations, nav: "conversations", title: "Разговоры", skel: "list" },
   { re: /^\/conversation\/(.+)$/, view: card, nav: "conversations", keys: ["id"], title: "Диалог", skel: "split" },
   { re: /^\/checklists$/, view: checklists, nav: "checklists", title: "Чек-листы", skel: "split" },
   { re: /^\/checklists\/(new|\d+)$/, view: checklists, nav: "checklists", keys: ["id"], title: "Чек-листы", skel: "split" },
+  { re: /^\/checklists\/(\d+)\/rule-check$/, view: ruleCheck, nav: "checklists", keys: ["id"], title: "Проверка правила", skel: "list" },
   { re: /^\/appeals$/, view: appeals, nav: "appeals", title: "Апелляции", skel: "split" },
   { re: /^\/appeals\/(\d+)$/, view: appeals, nav: "appeals", keys: ["id"], title: "Апелляции", skel: "split" },
   { re: /^\/accuracy$/, view: accuracy, nav: "accuracy", title: "Точность", skel: "list" },
@@ -62,11 +64,12 @@ async function route() {
   if (typeof cleanup === "function") cleanup();
   cleanup = null;
   const token = ++seq;
-  $$(".sidebar nav a").forEach((a) => {
+  $$(".site-nav [data-nav]").forEach((a) => {
     const on = a.dataset.nav === m.r.nav;
     a.classList.toggle("active", on);
     if (on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
   });
+  document.getElementById("reports-menu").classList.toggle("active", ["analytics", "accuracy"].includes(m.r.nav));
   document.title = `${m.r.title} · CQA`;
   const params = {};
   (m.r.keys || []).forEach((k, i) => (params[k] = decodeURIComponent(m.m[i + 1])));
@@ -123,12 +126,10 @@ async function loadMeta() {
     const email = me.email || "";
     document.getElementById("meta-info").innerHTML =
       (email ? `
-        <div class="user">
-          <span class="ava" aria-hidden="true">${esc(email.slice(0, 1))}</span>
-          <span class="who"><span class="email" title="${esc(email)}">${esc(email)}</span><a href="/oauth2/sign_out?rd=%2F">Выйти</a></span>
-        </div>` : "") +
-      `<div class="model"><span class="dot" aria-hidden="true"></span>Модель: <b>${esc(m.model)}</b></div>` +
-      (m.provider === "mock" ? `<div class="mock">⚠ mock-режим: ключ LLM не задан</div>` : "");
+        <div class="site-account"><b>${esc(email)}</b><a href="/oauth2/sign_out?rd=%2F">Выйти</a></div>` : "") +
+      `<div>Модель <b>${esc(m.model)}</b></div>` +
+      (m.provider === "mock" ? `<div class="site-demo-note">Демо-режим · оценки по эвристикам</div>` : "");
+    document.getElementById("workspace-menu").classList.toggle("is-demo", m.provider === "mock");
   } catch { /* ignore */ }
 }
 
@@ -145,5 +146,15 @@ document.getElementById("skip-link")?.addEventListener("click", (e) => {
 });
 
 window.addEventListener("hashchange", route);
+for (const menu of $$(".site-menu")) {
+  menu.addEventListener("click", (e) => { if (e.target.closest("a")) menu.open = false; });
+  document.addEventListener("click", (e) => { if (!menu.contains(e.target)) menu.open = false; });
+  menu.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && menu.open) {
+      menu.open = false;
+      menu.querySelector("summary").focus();
+    }
+  });
+}
 loadMeta();
 route();

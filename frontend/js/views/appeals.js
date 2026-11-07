@@ -6,38 +6,64 @@ import { msgHtml } from "../card/transcript.js";
 import { iconFor, plural } from "../card/score.js";
 
 let tab = "open";
+let caseCategory = "";
+const TABS = { open: "На рассмотрении", resolved: "Рассмотренные", cases: "Кейсы" };
+const CASE_CATEGORIES = {
+  service: "Обслуживание и процессы", product: "Продукт и баги",
+  checklist: "Правила оценки", other: "Другое",
+};
 
-export async function render(root, params) {
+export async function render(root, params, query = {}) {
   if (params.id) return renderDetail(root, Number(params.id));
+  if (query.tab === "cases") tab = "cases";
   const all = await api.appeals();
-  const lists = { open: all.filter((a) => a.status === "open"), resolved: all.filter((a) => a.status !== "open") };
+  const lists = {
+    open: all.filter((a) => a.status === "open"),
+    resolved: all.filter((a) => a.status !== "open"),
+    cases: all.filter((a) => a.case_details),
+  };
   const draw = () => {
-    const list = lists[tab];
+    const showCases = tab === "cases";
+    const list = showCases && caseCategory ? lists.cases.filter((a) => a.case_details.category === caseCategory) : lists[tab];
     root.innerHTML = `
       <div class="page-head">
         <div><h1>Апелляции</h1><div class="sub">Оспоренные оценки: проверяющий изучает доказательства и подтверждает или меняет ответ — итог пересчитывается.</div></div>
       </div>
       <div class="card">
         <div class="card-head">
-          <div class="ap-tabs" role="tablist" aria-label="Статус апелляций">
-            ${tabBtn("open", "На рассмотрении", lists.open.length)}
-            ${tabBtn("resolved", "Рассмотренные", lists.resolved.length)}
+          <div class="ap-tabs" role="tablist" aria-label="Разделы апелляций">
+            ${Object.entries(TABS).map(([key, label]) => tabBtn(key, label, lists[key].length)).join("")}
           </div>
         </div>
         <div role="tabpanel" id="ap-panel" aria-labelledby="ap-tab-${tab}">
+          ${showCases ? `<label class="ap-case-filter">Категория
+            <select class="input" id="case-filter">
+              <option value="">Все категории · ${lists.cases.length}</option>
+              ${Object.entries(CASE_CATEGORIES).map(([key, label]) =>
+                `<option value="${key}" ${caseCategory === key ? "selected" : ""}>${label} · ${lists.cases.filter((a) => a.case_details.category === key).length}</option>`).join("")}
+            </select></label>` : ""}
           ${list.length ? `
             <div class="ap-list">
-              <div class="ap-row ap-row-head" aria-hidden="true"><span>Статус</span><span>Критерий и диалог</span><span>Комментарий</span><span>Оценка / итог</span><span class="ap-date">${tab === "open" ? "Подана" : "Рассмотрена"}</span></div>
-              ${list.map(rowHtml).join("")}
+              <div class="ap-row ap-row-head" aria-hidden="true"><span>Статус</span><span>Критерий и диалог</span><span>${showCases ? "Кейс" : "Комментарий"}</span><span>Оценка / итог</span><span class="ap-date">${showCases ? "Дата" : tab === "open" ? "Подана" : "Рассмотрена"}</span></div>
+              ${list.map((a) => rowHtml(a, showCases)).join("")}
             </div>`
+          : showCases ? `<div class="ap-empty"><b>Кейсов в этой категории пока нет</b>
+              <span>Сохраните кейс в карточке апелляции, чтобы он появился здесь.</span></div>`
           : `<div class="ap-empty"><b>${tab === "open" ? "Нет апелляций на рассмотрении" : "Пока нет рассмотренных апелляций"}</b>
               <span>${tab === "open" ? "Оспорить оценку можно в карточке диалога — кнопка «Оспорить оценку» у критерия." : "Решения проверяющих появятся здесь."}</span></div>`}
         </div>
       </div>`;
     $$("[data-tab]", root).forEach((b) => b.addEventListener("click", () => { tab = b.dataset.tab; draw(); $(`[data-tab="${tab}"]`, root)?.focus(); }));
+    $("#case-filter", root)?.addEventListener("change", (e) => {
+      caseCategory = e.target.value;
+      draw();
+      $("#case-filter", root).focus();
+    });
     $(".ap-tabs", root).addEventListener("keydown", (e) => {
       if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
-      tab = tab === "open" ? "resolved" : "open";
+      const keys = Object.keys(TABS);
+      const direction = e.key === "ArrowRight" ? 1 : -1;
+      tab = keys[(keys.indexOf(tab) + direction + keys.length) % keys.length];
       draw();
       $(`[data-tab="${tab}"]`, root)?.focus();
     });
@@ -62,7 +88,7 @@ function deltaHtml(before, after) {
   return `<span class="ap-delta ${d > 0 ? "is-up" : "is-down"}">${d > 0 ? "+" : "−"}${fmtNum(Math.abs(d))}</span>`;
 }
 
-function rowHtml(a) {
+function rowHtml(a, showCase) {
   const resolved = a.status !== "open";
   const changed = a.status === "changed";
   return `
@@ -73,8 +99,9 @@ function rowHtml(a) {
         <div class="ap-dialog"><span class="mono">${esc(a.conversation_id)}</span>${a.channel ? `<span>${esc(CHANNEL[a.channel] || a.channel)}</span>` : ""}${a.language ? `<span>${esc(LANG[a.language] || a.language)}</span>` : ""}</div>
       </div>
       <div class="ap-cell-comment">
-        <div class="ap-comment">${esc(a.comment)}</div>
-        ${a.author ? `<div class="ap-author">${esc(a.author)}</div>` : ""}
+        ${showCase ? `<span class="cv-tag is-brand">${esc(CASE_CATEGORIES[a.case_details.category])}</span>` : ""}
+        <div class="ap-comment">${esc(showCase ? a.case_details.summary : a.comment)}</div>
+        ${!showCase && a.author ? `<div class="ap-author">${esc(a.author)}</div>` : ""}
       </div>
       <div class="ap-ba">
         <div class="ap-ba-line"><span class="ap-ba-k">Ответ</span>
@@ -102,7 +129,7 @@ function pointsFor(crit, value, srow) {
 }
 
 async function renderDetail(root, id) {
-  const { appeal: a, evaluation: ev, conversation: conv } = await api.appeal(id);
+  const { appeal: a, evaluation: ev, conversation: conv, checklist_versions: versions } = await api.appeal(id);
   const crit = ev.checklist.criteria.find((c) => c.id === a.criterion_id);
   if (!crit) throw new Error("Критерий не найден в версии чек-листа этой оценки");
   const row = ev.criteria.find((r) => r.criterion_id === a.criterion_id) || {}; // original model result
@@ -178,6 +205,8 @@ async function renderDetail(root, id) {
           </div>
           <div class="ap-sec-h">Объяснение модели</div>
           <p class="ap-expl">${esc(row.explanation || "—")}</p>
+          ${row.evidence_review ? `<div class="cv-note cv-note-warn"><b>Основание требует проверки.</b>
+            ${esc(row.evidence_review)} <a href="${cardLink()}">Сверить в карточке</a></div>` : ""}
           ${row.na_reason ? `<div class="cv-note cv-note-na"><b>Почему N/A:</b> ${esc(row.na_reason)}</div>` : ""}
           ${row.checked_range ? `<div class="cv-note cv-note-range"><b>Проверенный участок:</b> #${row.checked_range[0]}–#${row.checked_range[1]}${row.answer === "no" ? " — ожидаемое действие не найдено" : ""}</div>` : ""}
           ${crit.na_allowed && crit.na_condition ? `<div class="cv-note"><b>Когда допустим N/A:</b> ${esc(crit.na_condition)}</div>` : ""}
@@ -229,11 +258,67 @@ async function renderDetail(root, id) {
               <button class="btn btn-primary" id="btn-decide" type="button">Сохранить решение</button>
             </div>
           </div>
-        </section>` : resultHtml({ a, ev, crit, srowOrig, cardLink })}
+        </section>` : resultHtml({ a, ev, crit, srowOrig, cardLink, versions })}
+        <section class="card cv-pad" aria-labelledby="case-title">
+          <div class="ap-result-h"><h3 id="case-title">Кейс</h3><a class="btn btn-sm" href="#/appeals?tab=cases">Все кейсы</a></div>
+          <form class="ap-form" id="ap-case-form">
+            <label class="field">Категория
+              <select class="input" id="ap-case-category" required>
+                <option value="">Выберите категорию</option>
+                ${Object.entries(CASE_CATEGORIES).map(([key, label]) =>
+                  `<option value="${key}" ${a.case_details?.category === key ? "selected" : ""}>${label}</option>`).join("")}
+              </select></label>
+            <label class="field">Что произошло
+              <textarea class="input" id="ap-case-summary" rows="3" maxlength="500" required
+                placeholder="Например, клиенту не объяснили, когда ждать ответ по заявке">${esc(a.case_details?.summary || "")}</textarea></label>
+            <div class="ap-actions">
+              <span class="muted small" id="ap-case-status" role="status"></span>
+              <button class="btn" type="submit">${a.case_details ? "Обновить кейс" : "Сохранить кейс"}</button>
+            </div>
+          </form>
+        </section>
       </div>
     </div>`;
 
-  if (!isOpen) return;
+  $("#ap-case-form", root).addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const button = $("button[type=submit]", form);
+    const status = $("#ap-case-status", form);
+    const summary = $("#ap-case-summary", form).value.trim();
+    if (!summary) { status.textContent = "Опишите кейс."; return; }
+    status.textContent = "";
+    busy(button, true, "Сохраняем…");
+    let saved = false;
+    try {
+      await api.saveAppealCase(id, { category: $("#ap-case-category", form).value, summary });
+      saved = true;
+      status.textContent = "Кейс сохранён";
+    } catch (err) {
+      status.textContent = err.message;
+    } finally {
+      busy(button, false);
+      if (saved) button.textContent = "Обновить кейс";
+    }
+  });
+
+  if (!isOpen) {
+    $("#btn-rule-example", root).addEventListener("click", async (e) => {
+      const button = e.currentTarget;
+      const status = $("#ap-rule-example-status", root);
+      status.textContent = "";
+      busy(button, true, "Сохраняем…");
+      try {
+        await api.addRuleExample(ev.checklist_id, { criterion_id: crit.id, source_appeal_id: a.id });
+        button.textContent = "Контрольный пример сохранён";
+        status.textContent = "Решение проверяющего станет ожидаемым ответом при проверке правила.";
+      } catch (err) {
+        busy(button, false);
+        status.textContent = err.message;
+      }
+    });
+    return;
+  }
 
   const preview = () => {
     const dec = $("input[name=dec]:checked", root).value;
@@ -282,7 +367,7 @@ async function renderDetail(root, id) {
   });
 }
 
-function resultHtml({ a, ev, crit, srowOrig, cardLink }) {
+function resultHtml({ a, ev, crit, srowOrig, cardLink, versions }) {
   const changed = a.status === "changed";
   const from = answerView(crit, a.original_answer), to = answerView(crit, a.new_answer);
   return `
@@ -304,6 +389,13 @@ function resultHtml({ a, ev, crit, srowOrig, cardLink }) {
       ${ev.total !== null && Math.abs(Number(ev.total) - Number(a.total_before)) > 0.001
         ? `<div class="ap-orig-note">Исходная оценка модели: ${fmtNum(ev.total)}${srowOrig && srowOrig.points !== null ? ` · по критерию ${fmtNum(srowOrig.points)} б.` : ""}</div>` : ""}
       <div class="ap-orig-note">Текущий итог диалога: <b>${fmtNum(ev.final_total)}</b></div>
-      <div class="ap-actions" style="margin-top:14px"><a class="btn btn-primary" href="${cardLink()}">Открыть карточку с финальным результатом →</a></div>
+      ${versions.length ? `<div class="ap-orig-note">Версии правил по апелляции
+        ${versions.map((v) => `<a class="btn btn-sm" href="#/checklists/${v.id}">v${v.version}${v.is_active ? " · активная" : ""}</a>`).join(" ")}</div>` : ""}
+      <div class="ap-actions" style="margin-top:14px">
+        <button class="btn" id="btn-rule-example" type="button">Сохранить как контрольный пример</button>
+        <a class="btn" href="#/checklists?appeal=${a.id}">Уточнить правило</a>
+        <a class="btn btn-primary" href="${cardLink()}">К финальному результату →</a>
+      </div>
+      <div class="muted small" id="ap-rule-example-status" role="status"></div>
     </section>`;
 }

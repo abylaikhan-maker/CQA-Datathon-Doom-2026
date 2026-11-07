@@ -32,7 +32,8 @@ const chanLabel = (c) => CHANNEL[c] || c || "—";
 
 export async function render(root) {
   clearInterval(activePoll);
-  const [groups, checklists] = await Promise.all([api.groups(), api.checklists()]);
+  const [groups, checklists, meta] = await Promise.all([api.groups(), api.checklists(), api.meta().catch(() => null)]);
+  const openImport = () => importDialog(onImported, meta?.dataset_api_configured);
   if (state.group && !groups.some((g) => g.id === state.group)) state.group = "";
   if (!checklists.some((c) => c.id === state.checklistId)) {
     state.checklistId = (checklists.find((c) => c.is_active) || checklists[0])?.id ?? null;
@@ -43,26 +44,28 @@ export async function render(root) {
   };
 
   root.innerHTML = `<div class="conv-page">
-    <div class="page-head">
-      <div><h1>Диалоги</h1>
-        <div class="sub">Импортируйте набор, выберите версию чек-листа и запустите оценку. Строка открывает разбор диалога.</div></div>
-      <div class="spacer"></div>
-      <div class="page-actions">
-        <button class="btn" type="button" id="btn-upload">${icon("upload")}Загрузить JSON</button>
-        <button class="btn btn-primary" type="button" id="btn-import">${icon("cloud")}Импорт из API</button>
+    <header class="page-head">
+      <div>
+        <h1>Разговоры</h1>
+        <div class="sub">Звонки и чаты службы поддержки, оценки и основания для проверки.</div>
       </div>
-    </div>
+      <div class="page-actions">
+        <button class="btn" type="button" id="btn-upload">${icon("upload")}Загрузить файл</button>
+        <button class="btn btn-primary" type="button" id="btn-import">${icon("cloud")}Импортировать из API</button>
+      </div>
+    </header>
     <div id="batch"></div>
     <div class="kpis" id="kpis"></div>
-    <section class="card" aria-label="Список диалогов">
+    <section class="card" aria-label="Список разговоров">
+      <div class="card-head"><h2>Журнал разговоров</h2></div>
       <div class="conv-tools">
         <label class="field">Набор
           <select class="input" id="f-group">
             <option value="">Все наборы</option>
             ${groups.map((g) => `<option value="${esc(g.id)}" ${g.id === state.group ? "selected" : ""}>${esc(g.id)} (${g.count})</option>`).join("")}
           </select></label>
-        <label class="field f-search">Поиск по ID
-          <span class="input-icon">${icon("search")}<input class="input" type="search" id="f-q" placeholder="например, p1-ru-001" value="${esc(state.q)}" autocomplete="off"></span></label>
+        <label class="field f-search">Поиск
+          <span class="input-icon">${icon("search")}<input class="input" type="search" id="f-q" placeholder="Тема или ID" value="${esc(state.q)}" autocomplete="off"></span></label>
         <label class="field f-cl">Чек-лист для оценки
           <select class="input" id="f-checklist">
             ${checklists.map((c) => `<option value="${c.id}" ${c.id === state.checklistId ? "selected" : ""}>${esc(c.name)} · v${c.version}${c.is_active ? " (активный)" : ""}</option>`).join("")}
@@ -93,7 +96,7 @@ export async function render(root) {
       (skip === "lang" || !state.lang || r.language === state.lang) &&
       (skip === "channel" || !state.channel || r.channel === state.channel) &&
       (skip === "status" || !st?.test || st.test(r)) &&
-      (!q || r.id.toLowerCase().includes(q)));
+      (!q || r.id.toLowerCase().includes(q) || r.title?.toLowerCase().includes(q)));
   }
 
   function sorted(list) {
@@ -154,12 +157,12 @@ export async function render(root) {
       <button type="button" class="card kpi kpi-btn ${crit ? "is-bad" : ""}" data-kpi-status="critical" title="Показать диалоги с грубой ошибкой">
         <span class="lbl">${icon("alert")}Грубые ошибки</span>
         <span class="v">${crit}</span>
-        <span class="foot">${done.length ? `${fmtNum(pct(crit, done.length), 0)}% оценённых` : "—"}</span>
+        <span class="foot">${crit ? `Открыть диалоги ${icon("chev")}` : done.length ? "Нарушений не найдено" : "Оцените диалоги"}</span>
       </button>
       <a class="card kpi ${open ? "is-warn" : ""}" href="#/appeals" title="Перейти к апелляциям">
         <span class="lbl">${icon("scale")}Открытые апелляции</span>
         <span class="v">${open}</span>
-        <span class="foot">всего апелляций: ${allAppeals}</span>
+        <span class="foot">${open ? `Открыть апелляции ${icon("chev")}` : `всего апелляций: ${allAppeals}`}</span>
       </a>`;
   }
 
@@ -226,7 +229,7 @@ export async function render(root) {
       <table class="table conv-table">
         <caption class="sr-only">Диалоги и результаты оценки</caption>
         <thead><tr>
-          ${th("id", "ID диалога")}
+          ${th("id", "Разговор")}
           <th class="col-opt">Канал</th><th>Язык</th>
           ${th("messages", "Реплик", "num col-opt")}
           ${th("score", "Итог", "num")}
@@ -237,7 +240,7 @@ export async function render(root) {
             const crit = r.status === "done" && r.final_critical === "true";
             return `
             <tr class="click ${crit ? "is-crit" : ""}" data-id="${esc(r.id)}" data-href="${esc(cardHref(r))}">
-              <td class="id-cell"><a href="${cardHref(r)}">${esc(r.id)}</a></td>
+              <td class="id-cell"><a href="${cardHref(r)}">${esc(r.title?.trim() || r.id)}</a>${r.title?.trim() ? `<small>${esc(r.id)}</small>` : ""}</td>
               <td class="col-opt"><span class="chan">${chanIcon(r.channel)}${esc(chanLabel(r.channel))}</span></td>
               <td><span class="lang" title="${esc(LANG[r.language] || r.language || "")}">${esc(r.language || "—")}</span></td>
               <td class="num col-opt">${esc(r.messages)}</td>
@@ -273,7 +276,11 @@ export async function render(root) {
     const kpi = e.target.closest("[data-kpi-status]");
     if (kpi) { state.status = state.status === kpi.dataset.kpiStatus ? "" : kpi.dataset.kpiStatus; draw(); return; }
     const cta = e.target.closest("[data-cta]");
-    if (cta) { (cta.dataset.cta === "import" ? importDialog : uploadDialog)(onImported); return; }
+    if (cta) {
+      if (cta.dataset.cta === "import") openImport();
+      else uploadDialog(onImported);
+      return;
+    }
     const tr = e.target.closest("tr[data-id]");
     if (tr && !e.target.closest("a")) location.hash = tr.dataset.href;
   });
@@ -286,7 +293,7 @@ export async function render(root) {
   const onSearch = debounce(() => draw(), 120);
   $("#f-q", root).addEventListener("input", (e) => { state.q = e.target.value; onSearch(); });
 
-  $("#btn-import", root).addEventListener("click", () => importDialog(onImported));
+  $("#btn-import", root).addEventListener("click", openImport);
   $("#btn-upload", root).addEventListener("click", () => uploadDialog(onImported));
   function onImported(res) {
     toast(`Импортировано ${res.imported} ${plural(res.imported, ["диалог", "диалога", "диалогов"])} в набор ${res.group}. Нажмите «Оценить новые», чтобы запустить оценку.`);
@@ -442,35 +449,60 @@ function statusBadge(r) {
   return `<span class="badge warn"><span class="spinner" style="width:10px;height:10px" aria-hidden="true"></span>${r.status === "running" ? "оценивается" : "в очереди"}</span>`;
 }
 
-export function importDialog(done) {
+function importDialog(done, configured) {
   const m = modal({
     title: "Импорт набора из API организаторов",
     submitText: "Импортировать",
     body: `
-      <label class="field">group_id
-        <input class="input" id="imp-group" value="DEV" placeholder="DEV" autocomplete="off" required></label>
-      <div class="quick-picks" aria-label="Быстрый выбор">
-        <button type="button" class="chip" data-pick="DEV">DEV</button>
-      </div>
-      <details class="more">
-        <summary>Другой адрес API</summary>
-        <label class="field">Адрес API <span class="hint">по умолчанию — из настроек сервера</span>
-          <input class="input" id="imp-url" placeholder="https://…?group_id={group_id}" autocomplete="off"></label>
+      <label class="field">Код набора
+        <input class="input" id="imp-group" value="DEV" placeholder="DEV" autocomplete="off" aria-describedby="imp-group-help" required>
+        <span class="hint" id="imp-group-help">Для учебного набора используйте DEV.</span>
+      </label>
+      <details class="more" ${configured === false ? "open" : ""}>
+        <summary>${configured ? "Указать другой адрес API" : "Ссылка на API организаторов"}</summary>
+        <label class="field">Адрес API
+          <input class="input" id="imp-url" type="password" placeholder="https://…" autocomplete="off" spellcheck="false" aria-describedby="imp-url-help">
+          <span class="hint" id="imp-url-help">${configured ? "Если оставить поле пустым, используем настроенное подключение." : "Вставьте полную ссылку из гайда организаторов."}</span>
+        </label>
       </details>
-      <div class="note">Запрос выполняется через сервер. Повторный импорт обновляет транскрипты, оценки сохраняются.</div>`,
+      <div class="note">Повторный импорт обновит транскрипты и сохранит оценки.</div>
+      <div class="import-error" id="imp-error" role="alert" hidden></div>`,
     onSubmit: async (el) => {
-      const g = $("#imp-group", el).value.trim();
-      if (!g) { $("#imp-group", el).focus(); throw new Error("Укажите group_id"); }
+      const group = $("#imp-group", el);
+      const url = $("#imp-url", el);
+      const error = $("#imp-error", el);
+      const g = group.value.trim();
+      const address = url.value.trim();
+      error.hidden = true;
+      const showError = (message, field) => {
+        error.textContent = message;
+        error.hidden = false;
+        if (field) {
+          if (field === url) url.closest("details").open = true;
+          field.setAttribute("aria-invalid", "true");
+          field.setAttribute("aria-errormessage", error.id);
+          field.focus();
+        }
+        return false;
+      };
+      if (!g) return showError("Укажите код набора.", group);
+      if (configured === false && !address) return showError("Вставьте ссылку из гайда организаторов.", url);
+      if (address && !/^https?:\/\//i.test(address)) return showError("Ссылка должна начинаться с https:// или http://.", url);
       const ok = $("[data-ok]", el);
       busy(ok, true, "Импорт…");
+      let result;
       try {
-        done(await api.importGroup(g, $("#imp-url", el).value.trim()));
+        result = await api.importGroup(g, address);
+      } catch (e) {
+        return showError(e instanceof TypeError ? "Нет связи с сервером. Попробуйте ещё раз." : e.message);
       } finally { busy(ok, false); }
+      done(result);
     },
   });
-  m.el.addEventListener("click", (e) => {
-    const p = e.target.closest("[data-pick]");
-    if (p) { $("#imp-group", m.el).value = p.dataset.pick; $("#imp-group", m.el).focus(); }
+  m.el.addEventListener("input", (e) => {
+    e.target.removeAttribute("aria-invalid");
+    e.target.removeAttribute("aria-errormessage");
+    $("#imp-error", m.el).hidden = true;
   });
   $("#imp-group", m.el).select();
 }

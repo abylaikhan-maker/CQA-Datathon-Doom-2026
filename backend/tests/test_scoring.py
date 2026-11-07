@@ -38,6 +38,11 @@ def test_critical_flag_separate_from_score():
     assert r["total"] == 100 and r["critical"] is True and r["critical_criteria"] == ["c08"]
 
 
+def test_total_rounds_half_up_after_redistribution():
+    ans = {"c01": "yes", "c02": "no", "c03": "na", "c04": 5, "c05": "yes", "c06": 7, "c07": "no", "c08": "no"}
+    assert scoring.compute(CFG, ans)["total"] == 50.63
+
+
 def test_no_applicable_criteria_no_total():
     cfg = {"criteria": [{"id": "a", "type": "binary", "weight": 10, "na_allowed": True}], "sections": []}
     assert scoring.compute(cfg, {"a": "na"})["total"] is None

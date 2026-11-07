@@ -3,9 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#0f3a2c">
+  <meta name="theme-color" content="#eef1f5">
   <title>CQA — оценка качества диалогов</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230f3a2c'/><path d='M9 17l5 5 9-11' stroke='%23b8e08a' stroke-width='3.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%231d4083'/><path d='M9 17l5 5 9-11' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
   <link rel="stylesheet" href="static/css/app.css">
   <link rel="stylesheet" href="static/css/card.css">
   <link rel="stylesheet" href="static/css/accuracy.css">
@@ -17,24 +17,28 @@
 <body>
   <a class="skip-link" href="#view" id="skip-link">Перейти к содержимому</a>
   <div class="route-bar" id="route-bar" aria-hidden="true"></div>
-  <div class="layout">
-    <aside class="sidebar">
-      <a class="brand" href="#/conversations" aria-label="CQA — Conversation Quality Analytics, на главную">
-        <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>
-        <span class="brand-text"><b>CQA</b><small>Conversation Quality Analytics</small></span>
-      </a>
-      <nav aria-label="Разделы">
-        <div class="nav-label">Разделы</div>
-        <a href="#/conversations" data-nav="conversations"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H8l-4 4z"/></svg>Диалоги</a>
-        <a href="#/checklists" data-nav="checklists"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 12l3 3 5-6"/></svg>Чек-листы</a>
-        <a href="#/appeals" data-nav="appeals"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M5 7h14M5 7l-3 7h6zM19 7l-3 7h6zM8 21h8"/></svg>Апелляции<b class="nav-badge" id="appeals-badge" hidden></b></a>
-        <a href="#/analytics" data-nav="analytics"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V12M12 20V5M19 20v-9"/></svg>Аналитика</a>
-        <a href="#/accuracy" data-nav="accuracy"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="0.8"/></svg>Точность</a>
+  <header class="site-head">
+    <div class="site-head-inner">
+      <a class="brand" href="#/conversations" aria-label="CQA, все разговоры">CQA</a>
+      <nav class="site-nav" aria-label="Разделы">
+        <a href="#/conversations" data-nav="conversations">Разговоры</a>
+        <a href="#/checklists" data-nav="checklists">Чек-листы</a>
+        <a href="#/appeals" data-nav="appeals">Апелляции<b class="nav-badge" id="appeals-badge" hidden></b></a>
+        <details class="site-menu" id="reports-menu">
+          <summary>Отчёты</summary>
+          <div class="site-popover">
+            <a href="#/analytics" data-nav="analytics">Аналитика</a>
+            <a href="#/accuracy" data-nav="accuracy">Точность оценок</a>
+          </div>
+        </details>
       </nav>
-      <div class="sidebar-foot" id="meta-info"></div>
-    </aside>
-    <main id="view" class="main" tabindex="-1" aria-busy="false"></main>
-  </div>
+      <details class="site-menu site-org" id="workspace-menu">
+        <summary>Freedom Broker</summary>
+        <div class="site-popover" id="meta-info">Контроль качества разговоров</div>
+      </details>
+    </div>
+  </header>
+  <main id="view" class="main" tabindex="-1" aria-busy="false"></main>
   <div id="toasts" class="toasts" aria-live="polite"></div>
   <script type="module" src="static/js/app.js"></script>
 </body>

@@ -6,14 +6,14 @@ import io
 import json
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, StringConstraints
 
-from . import accuracy, audio, config, dataset, db, evaluator, scoring, version
+from . import accuracy, audio, config, dataset, db, evaluator, rule_checks, scoring, version
 
 _bg: set[asyncio.Task] = set()
 
@@ -37,6 +37,7 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="CQA — Conversation Quality Analytics", lifespan=lifespan)
+app.include_router(rule_checks.router)
 
 
 @app.exception_handler(dataset.DatasetError)
@@ -130,7 +131,7 @@ async def groups():
 async def list_conversations(group: str | None = None, checklist_id: int | None = None):
     async with db.pool.acquire() as conn:
         rows = await conn.fetch(
-            """SELECT c.id, c.dataset_group, c.channel, c.language, c.audio_url,
+            """SELECT c.id, c.dataset_group, c.channel, c.language, c.audio_url, c.raw->>'title' AS title,
                       jsonb_array_length(c.transcript) AS messages,
                       e.id AS eval_id, e.status, e.total, e.final_total, e.critical, e.checklist_id,
                       e.final_score->>'critical' AS final_critical, e.error,
@@ -162,7 +163,7 @@ async def get_audio(cid: str):
 @app.get("/api/conversations/{cid}")
 async def get_conversation(cid: str):
     async with db.pool.acquire() as conn:
-        c = await conn.fetchrow("SELECT id, dataset_group, channel, language, transcript, audio_url, imported_at "
+        c = await conn.fetchrow("SELECT id, dataset_group, channel, language, transcript, audio_url, imported_at, raw->>'title' AS title "
                                 "FROM conversations WHERE id=$1", cid)
         if not c:
             not_found("Диалог")
@@ -179,6 +180,7 @@ class ChecklistIn(BaseModel):
     config: dict[str, Any]
     note: str | None = None
     activate: bool = True
+    source_appeal_id: int | None = Field(default=None, gt=0)
 
 
 def validate_checklist(cfg: dict) -> dict:
@@ -249,12 +251,22 @@ async def save_checklist(body: ChecklistIn):
     cfg = validate_checklist(body.config)
     async with db.pool.acquire() as conn:
         async with conn.transaction():
+            if body.source_appeal_id is not None:
+                source = await conn.fetchrow(
+                    """SELECT a.status, k.name FROM appeals a
+                       JOIN evaluations e ON e.id=a.evaluation_id
+                       JOIN checklists k ON k.id=e.checklist_id WHERE a.id=$1""", body.source_appeal_id)
+                if not source or source["status"] == "open":
+                    raise HTTPException(400, "Сначала сохраните решение по апелляции.")
+                if source["name"] != cfg["name"]:
+                    raise HTTPException(400, "Сохраните правило в новой версии чек-листа из апелляции.")
             ver = await conn.fetchval("SELECT coalesce(max(version),0)+1 FROM checklists WHERE name=$1", cfg["name"])
             if body.activate:
                 await conn.execute("UPDATE checklists SET is_active=false")
             r = await conn.fetchrow(
-                "INSERT INTO checklists (name, version, config, is_active, note) VALUES ($1,$2,$3,$4,$5) RETURNING *",
-                cfg["name"], ver, cfg, body.activate, body.note)
+                """INSERT INTO checklists (name, version, config, is_active, note, source_appeal_id)
+                   VALUES ($1,$2,$3,$4,$5,$6) RETURNING *""",
+                cfg["name"], ver, cfg, body.activate, body.note, body.source_appeal_id)
     return db.rec(r)
 
 
@@ -301,12 +313,22 @@ async def create_evaluation(req: EvalReq):
 async def get_evaluation(eid: int):
     async with db.pool.acquire() as conn:
         e = await conn.fetchrow(
-            """SELECT e.*, k.name AS checklist_name, k.version AS checklist_version, k.config AS checklist
-               FROM evaluations e JOIN checklists k ON k.id=e.checklist_id WHERE e.id=$1""", eid)
+            """SELECT e.*, k.name AS checklist_name, k.version AS checklist_version, k.config AS checklist,
+                      c.transcript AS current_transcript
+               FROM evaluations e JOIN checklists k ON k.id=e.checklist_id
+               JOIN conversations c ON c.id=e.conversation_id WHERE e.id=$1""", eid)
         if not e:
             not_found("Оценка")
         appeals = await conn.fetch("SELECT * FROM appeals WHERE evaluation_id=$1 ORDER BY id", eid)
-    return {**db.rec(e), "appeals": db.recs(appeals)}
+    result = db.rec(e)
+    transcript = result.pop("current_transcript")
+    for field in ("criteria", "final_criteria"):
+        if result[field] is not None:
+            result[field] = [evaluator.check_evidence(row, transcript) for row in result[field]]
+    for row in result["final_criteria"] or []:
+        if row.get("review") and "reviews" not in row:
+            row["reviews"] = _appeal_history(appeals, row["criterion_id"]) or [row["review"]]
+    return {**result, "appeals": db.recs(appeals)}
 
 
 class BatchReq(BaseModel):
@@ -375,12 +397,30 @@ class DecisionIn(BaseModel):
     reviewer: str | None = None
 
 
+class AppealCaseIn(BaseModel):
+    category: Literal["service", "product", "checklist", "other"]
+    summary: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)]
+
+
 def _same_answer(a: Any, b: Any) -> bool:
     """20 == 20.0 == "20" for scale steps; plain equality for yes / no / na."""
     try:
         return float(a) == float(b)
     except (TypeError, ValueError):
         return a == b
+
+
+def _appeal_history(appeals, criterion_id: str) -> list[dict]:
+    resolved = sorted(
+        (a for a in appeals if a["criterion_id"] == criterion_id and a["resolved_at"] is not None),
+        key=lambda a: (a["resolved_at"], a["id"]),
+    )
+    return [
+        {"appeal_id": a["id"], "reason": a["reason"], "reviewer": a["reviewer"],
+         **({"confirmed": True} if a["status"] == "confirmed"
+            else {"from": a["original_answer"], "to": a["new_answer"]})}
+        for a in resolved
+    ]
 
 
 @app.post("/api/appeals")
@@ -430,7 +470,17 @@ async def get_appeal(aid: int):
     async with db.pool.acquire() as conn:
         conv = await conn.fetchrow("SELECT id, channel, language, transcript, audio_url FROM conversations WHERE id=$1",
                                    ev["conversation_id"])
-    return {"appeal": db.rec(a), "evaluation": ev, "conversation": db.rec(conv)}
+        versions = await conn.fetch(
+            "SELECT id, name, version, is_active FROM checklists WHERE source_appeal_id=$1 ORDER BY id DESC", aid)
+    return {"appeal": db.rec(a), "evaluation": ev, "conversation": db.rec(conv), "checklist_versions": db.recs(versions)}
+
+
+@app.patch("/api/appeals/{aid}/case")
+async def save_appeal_case(aid: int, body: AppealCaseIn):
+    async with db.pool.acquire() as conn:
+        details = await conn.fetchval(
+            "UPDATE appeals SET case_details=$2 WHERE id=$1 RETURNING case_details", aid, body.model_dump())
+    return details or not_found("Апелляция")
 
 
 @app.post("/api/appeals/{aid}/decision")
@@ -466,9 +516,14 @@ async def decide_appeal(aid: int, body: DecisionIn, request: Request):
                 row["answer"] = new_answer
             else:
                 review = {"confirmed": True, "reason": body.reason, "appeal_id": aid, "reviewer": reviewer}
-            # `review` is the latest decision; `reviews` keeps every decision on this criterion.
+            history = row.get("reviews") or []
+            if not history and row.get("review"):
+                previous = await conn.fetch(
+                    """SELECT * FROM appeals WHERE evaluation_id=$1 AND criterion_id=$2
+                       AND resolved_at IS NOT NULL""", e["id"], a["criterion_id"])
+                history = _appeal_history(previous, a["criterion_id"]) or [row["review"]]
             row["review"] = review
-            row["reviews"] = [*(row.get("reviews") or []), review]
+            row["reviews"] = [*history, review]
             score = evaluator.recompute_final(cfg, final)
             await conn.execute("UPDATE evaluations SET final_criteria=$2, final_score=$3, final_total=$4 WHERE id=$1",
                                e["id"], final, score, score["total"])

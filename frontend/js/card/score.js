@@ -1,21 +1,6 @@
 // HTML builders for the "Оценка качества" panel (pure functions, no DOM state).
 import { esc, fmtNum, fmtDate, fmtTs, answerView, SPEAKER } from "../util.js";
 
-export function ringHtml(value, size = 128) {
-  const r = 44, c = 2 * Math.PI * r;
-  const has = value !== null && value !== undefined;
-  const v = has ? Math.max(0, Math.min(100, Number(value))) : 0;
-  const tone = !has ? "none" : v >= 85 ? "hi" : v >= 65 ? "mid" : "lo";
-  return `
-    <div class="cv-ring cv-tone-${tone}" style="width:${size}px;height:${size}px" role="img" aria-label="Итог ${has ? fmtNum(value) : "не рассчитан"} из 100">
-      <svg viewBox="0 0 100 100" aria-hidden="true">
-        <circle class="cv-ring-bg" cx="50" cy="50" r="${r}"/>
-        ${v > 0 ? `<circle class="cv-ring-fg" cx="50" cy="50" r="${r}" stroke-dasharray="${((c * v) / 100).toFixed(2)} ${c.toFixed(2)}"/>` : ""}
-      </svg>
-      <div class="cv-ring-val"><b>${has ? fmtNum(value) : "—"}</b><span>/ 100</span></div>
-    </div>`;
-}
-
 /** Icon text + kind for a criterion answer (✓ ✕ ~ N/A !). */
 export function iconFor(crit, answer) {
   const av = answerView(crit, answer);
@@ -36,7 +21,7 @@ export function shortReason(crit, row) {
 export const firstRef = (row) => (row && ((row.evidence || [])[0] || (row.checked_range || [])[0])) || null;
 
 /** Same answer regardless of representation: 20 / 20.0 / "20" for scale steps; yes / no / na as is. */
-export function sameAnswer(a, b) {
+function sameAnswer(a, b) {
   const num = (v) => (v === null || v === undefined || v === "" ? NaN : Number(v));
   const x = num(a), y = num(b);
   return Number.isNaN(x) || Number.isNaN(y) ? a === b : x === y;
@@ -44,6 +29,12 @@ export function sameAnswer(a, b) {
 
 /** True when reviewers left this criterion with an answer different from the model's original one. */
 export const isRevised = (row, orow) => !!(row && orow && !sameAnswer(orow.answer, row.answer));
+
+export function changeReview(row, original) {
+  if (!isRevised(row, original)) return null;
+  const history = row.reviews || (row.review ? [row.review] : []);
+  return history.findLast((decision) => !decision.confirmed) || null;
+}
 
 const pointsLabel = (crit, row, srow) => {
   const av = answerView(crit, row.answer);
@@ -57,36 +48,48 @@ const pointsLabel = (crit, row, srow) => {
 };
 
 function evidenceHtml(row, msgs, rel) {
-  const chips = (row.evidence || []).map((n) => {
+  const hasQuotes = Array.isArray(row.evidence_quotes);
+  const quotes = hasQuotes ? row.evidence_quotes : (row.evidence || []).map((turn) => ({ turn }));
+  const chips = quotes.map(({ turn: n, quote, issue }) => {
     const m = msgs[n - 1];
-    if (!m) return "";
-    const sp = String(m.speaker || "").toLowerCase();
+    if (!m && !issue) return "";
+    const sp = String(m?.speaker || "").toLowerCase();
     const t = rel && rel[n - 1] !== null && rel[n - 1] !== undefined ? rel[n - 1] : null;
+    const ref = m ? `#${n} · ${esc(SPEAKER[sp] || m.speaker)}${t !== null ? ` · ${esc(t)}` : m.timestamp ? ` · ${esc(fmtTs(m.timestamp))}` : ""}` : "Реплика недоступна";
+    if (issue) return `<div class="cv-ev is-unverified">
+      <span class="cv-ev-ref">${m ? `<button type="button" class="cv-link" data-msg="${n}">${ref}</button>` : ref}</span>
+      ${quote ? `<span class="cv-ev-q">«${esc(quote)}»</span>` : ""}
+      <span class="cv-ev-issue">${esc(issue)}</span>
+    </div>`;
     return `<button type="button" class="cv-ev cv-ev-${esc(sp)}" data-msg="${n}" aria-label="Перейти к реплике #${n}">
-      <span class="cv-ev-ref">#${n} · ${esc(SPEAKER[sp] || m.speaker)}${t !== null ? ` · ${esc(t)}` : m.timestamp ? ` · ${esc(fmtTs(m.timestamp))}` : ""}</span>
-      <span class="cv-ev-q">${esc(m.text)}</span></button>`;
+      <span class="cv-ev-ref">${ref}${hasQuotes ? " · Цитата сверена" : ""}</span>
+      <span class="cv-ev-q">${hasQuotes ? `«${esc(quote)}»` : esc(m.text)}</span></button>`;
   }).join("");
-  return chips ? `<div class="cv-sub-h">Реплики-доказательства</div><div class="cv-ev-list">${chips}</div>` : "";
+  const empty = row.evidence_review && !chips ? `<div class="cv-note cv-note-warn">${esc(row.evidence_review)}</div>` : "";
+  return chips ? `<div class="cv-sub-h">${hasQuotes ? "Цитаты из оценки" : "Реплики из оценки"}</div><div class="cv-ev-list">${chips}</div>` : empty;
 }
 
 /** A criterion row (collapsed header + expandable body). */
 export function critHtml({ row, crit, srow, orow, appeals, msgs, rel, canAppeal, open }) {
   if (!crit) return "";
-  const ic = iconFor(crit, row.answer);
+  const status = row.answer === "na" ? "Не применимо" : crit.type === "binary"
+    ? (row.answer === "yes" ? "Выполнено" : "Не выполнено") : answerView(crit, row.answer).label;
   const pts = pointsLabel(crit, row, srow);
   const openAppeal = appeals.find((a) => a.status === "open");
+  const revised = isRevised(row, orow);
+  const modelAnswer = orow?.answer ?? row.answer;
   const cid = esc(crit.id);
   const range = row.checked_range
     ? `<div class="cv-note cv-note-range"><b>Проверенный участок:</b>
         <button type="button" class="cv-link" data-msg="${row.checked_range[0]}">#${row.checked_range[0]}</button>–<button type="button" class="cv-link" data-msg="${row.checked_range[1]}">#${row.checked_range[1]}</button>
-        ${row.answer === "no" ? " — ожидаемое действие здесь не найдено" : ""}</div>` : "";
+        ${modelAnswer === "no" ? " — ожидаемое действие здесь не найдено" : ""}</div>` : "";
   // Older rows carry only `review` (latest decision); newer ones also keep the full `reviews` history.
   const reviews = row.reviews || (row.review ? [row.review] : []);
   const last = reviews[reviews.length - 1];
-  const revised = isRevised(row, orow);
+  const decision = changeReview(row, orow) || last;
   let review = "";
-  if (last) {
-    const who = last.reviewer ? ` · ${esc(last.reviewer)}` : "";
+  if (decision) {
+    const who = decision.reviewer ? ` · ${esc(decision.reviewer)}` : "";
     const head = revised ? "✎ Изменено проверяющим" : last.confirmed ? "✔ Оценка подтверждена проверяющим" : "↺ Возвращён ответ модели";
     review = `<div class="cv-review ${revised ? "is-changed" : "is-confirmed"}"><div class="cv-review-h">${head}${who}</div>
         ${revised ? `<div class="cv-review-ft">
@@ -94,7 +97,7 @@ export function critHtml({ row, crit, srow, orow, appeals, msgs, rel, canAppeal,
           <span class="cv-arrow" aria-hidden="true">→</span>
           <span class="cv-now"><small>Итог</small>${esc(answerView(crit, row.answer).label)}${srow && srow.points !== null && srow.points !== undefined ? ` · ${fmtNum(srow.points)} б.` : ""}</span>
         </div>` : ""}
-        <div class="cv-review-r">Причина: ${esc(last.reason)}</div>
+        <div class="cv-review-r">${esc(decision.reason)}</div>
         ${reviews.length > 1 ? `<div class="cv-review-r">Решений по критерию: ${reviews.length}, история — в апелляциях ниже</div>` : ""}</div>`;
   }
   const apps = appeals.map((a) => `
@@ -105,23 +108,24 @@ export function critHtml({ row, crit, srow, orow, appeals, msgs, rel, canAppeal,
   return `
     <div class="cv-crit ${open ? "is-open" : ""}" data-crit="${cid}">
       <button type="button" class="cv-crit-top" data-toggle="${cid}" aria-expanded="${open ? "true" : "false"}" aria-controls="cvc-${cid}">
-        <span class="cv-ic cv-k-${ic.kind}" aria-hidden="true">${esc(ic.icon)}</span>
         <span class="cv-crit-main">
-          <span class="cv-crit-title">${crit.code ? `<span class="cv-code">${esc(crit.code)}</span>` : ""}${esc(crit.title)}</span>
-          <span class="cv-crit-sub">${pts.sub}
-            ${openAppeal ? `<span class="cv-tag is-warn">апелляция</span>` : ""}${last ? `<span class="cv-tag is-brand">${revised ? "пересмотрено" : "подтверждено"}</span>` : ""}</span>
+          <span class="cv-crit-title">${esc(crit.title)}</span>
+          ${row.evidence_review ? '<span class="cv-evidence-status">Требует проверки</span>' : ""}
+          ${openAppeal ? '<span class="cv-tag is-warn">Апелляция</span>' : ""}
+          ${last ? `<span class="cv-tag is-brand">${revised ? "Пересмотрено" : last.confirmed ? "Подтверждено" : "Ответ модели восстановлен"}</span>` : ""}
         </span>
-        <span class="cv-crit-pts">${pts.main}</span>
+        <span class="cv-crit-result">${esc(status)}</span>
         <span class="cv-chev" aria-hidden="true"></span>
       </button>
       <div class="cv-crit-body" id="cvc-${cid}" ${open ? "" : "hidden"}>
-        ${revised ? `<div class="cv-sub-h">Объяснение модели · к исходному ответу «${esc(answerView(crit, orow.answer).label)}»</div>` : ""}
+        <div class="cv-crit-detail-line"><b>${pts.main}</b><span>${pts.sub}</span></div>
+        ${review}
+        ${revised ? `<div class="cv-sub-h">Объяснение модели · исходный ответ «${esc(answerView(crit, modelAnswer).label)}»</div>` : ""}
         <p class="cv-expl">${esc(row.explanation || "—")}</p>
-        ${row.answer === "na" && row.na_reason ? `<div class="cv-note cv-note-na"><b>Почему N/A:</b> ${esc(row.na_reason)}</div>` : ""}
+        ${modelAnswer === "na" && row.na_reason ? `<div class="cv-note cv-note-na"><b>Почему N/A:</b> ${esc(row.na_reason)}</div>` : ""}
         ${evidenceHtml(row, msgs, rel)}
         ${range}
         ${row.warning ? `<div class="cv-note cv-note-warn">⚠ ${esc(row.warning)}</div>` : ""}
-        ${review}
         ${apps}
         <div class="cv-crit-actions">
           ${ref ? `<button type="button" class="btn btn-sm" data-jump="${cid}">Перейти к фрагменту</button>` : ""}
@@ -131,15 +135,19 @@ export function critHtml({ row, crit, srow, orow, appeals, msgs, rel, canAppeal,
     </div>`;
 }
 
-/** "Почему снижена оценка": criteria that lost points, biggest loss first. */
-export function lossesHtml({ ev, critCfg, scoreRows, appealsBy, expanded }) {
-  const origRows = Object.fromEntries((ev.score?.criteria || []).map((r) => [r.criterion_id, r]));
-  const items = ev.final_criteria
+/** Criteria that lost points, biggest loss first. */
+export function lossItems(ev, critCfg, scoreRows) {
+  return ev.final_criteria
     .map((row) => ({ row, crit: critCfg[row.criterion_id], s: scoreRows[row.criterion_id] }))
     .filter(({ crit, row, s }) => crit && crit.type !== "critical" && row.answer !== "na" && s && s.max_points !== null && s.points !== null && s.max_points - s.points > 0.001)
     .map((x) => ({ ...x, loss: x.s.max_points - x.s.points }))
     .sort((a, b) => b.loss - a.loss);
+}
+
+export function lossesHtml({ ev, critCfg, scoreRows, appealsBy, expanded }) {
+  const items = lossItems(ev, critCfg, scoreRows);
   if (!items.length) return "";
+  const origRows = Object.fromEntries(ev.score.criteria.map((r) => [r.criterion_id, r]));
   const total = items.reduce((acc, x) => acc + x.loss, 0);
   const LIMIT = 3;
   const shown = expanded ? items : items.slice(0, LIMIT);
@@ -151,7 +159,8 @@ export function lossesHtml({ ev, critCfg, scoreRows, appealsBy, expanded }) {
         ${shown.map(({ row, crit, s, loss }) => {
           const ic = iconFor(crit, row.answer);
           const open = (appealsBy[crit.id] || []).some((a) => a.status === "open");
-          const ref = firstRef(row);
+          const decision = changeReview(row, origRows[crit.id]);
+          const ref = decision ? null : firstRef(row);
           return `
           <li class="cv-why-item">
             <span class="cv-ic cv-k-${ic.kind}" aria-hidden="true">${esc(ic.icon)}</span>
@@ -160,8 +169,8 @@ export function lossesHtml({ ev, critCfg, scoreRows, appealsBy, expanded }) {
                 <button type="button" class="cv-link cv-why-name" data-open="${esc(crit.id)}">${crit.code ? `<span class="cv-code">${esc(crit.code)}</span>` : ""}${esc(crit.title)}</button>
                 <span class="cv-why-pts">${fmtNum(s.points)} / ${fmtNum(s.max_points)} <b>−${fmtNum(loss)}</b></span>
               </div>
-              <p class="cv-why-text">${isRevised(row, origRows[crit.id]) && row.review
-                ? `<b>Проверяющий:</b> ${esc(row.review.reason)}`
+              <p class="cv-why-text">${decision
+                ? `<b>Решение проверяющего</b> · ${esc(decision.reason)}`
                 : esc(shortReason(crit, row) || "—")}</p>
               <div class="cv-why-actions">
                 ${ref ? `<button type="button" class="btn btn-sm" data-jump="${esc(crit.id)}">Перейти к фрагменту${row.evidence && row.evidence[0] ? ` #${row.evidence[0]}` : ""}</button>` : ""}

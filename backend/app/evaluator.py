@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from unicodedata import normalize
 
 from . import config, db, llm, scoring, version
 
@@ -9,6 +10,43 @@ from . import config, db, llm, scoring, version
 def _cost(usage: dict) -> float:
     return round(usage.get("input_tokens", 0) / 1e6 * config.PRICE_INPUT_PER_M
                  + usage.get("output_tokens", 0) / 1e6 * config.PRICE_OUTPUT_PER_M, 6)
+
+
+def _quote_text(text: str) -> str:
+    return " ".join(normalize("NFC", text).split())
+
+
+def verify_evidence(items: list, transcript: list[dict]) -> list[dict]:
+    quotes = []
+    for item in items:
+        turn = item.get("turn") if isinstance(item, dict) else item
+        turn = turn if type(turn) is int else None
+        quote = item.get("quote") if isinstance(item, dict) else None
+        quote = quote.strip() if isinstance(quote, str) else ""
+        if turn is None or not 1 <= turn <= len(transcript):
+            issue = "Указанной реплики нет в транскрипте."
+        elif not quote:
+            issue = "Модель сослалась на реплику без цитаты."
+        elif _quote_text(quote) not in _quote_text(str(transcript[turn - 1].get("text") or "")):
+            issue = "Цитата не найдена в указанной реплике."
+        else:
+            issue = None
+        quotes.append({"turn": turn, "quote": quote, "issue": issue})
+    return quotes
+
+
+def check_evidence(row: dict, transcript: list[dict]) -> dict:
+    # Older evaluations contain only numbered references. Preserve that format on read.
+    if "evidence_quotes" not in row:
+        return row
+    quotes = verify_evidence(row["evidence_quotes"], transcript)
+    issue = next((quote["issue"] for quote in quotes if quote["issue"]), None)
+    return {
+        **row,
+        "evidence_quotes": quotes,
+        "evidence": sorted({quote["turn"] for quote in quotes if not quote["issue"]}),
+        "evidence_review": issue or row.get("evidence_missing"),
+    }
 
 
 def build_criteria(cfg: dict, conv: dict, model_out: dict) -> list[dict]:
@@ -21,21 +59,27 @@ def build_criteria(cfg: dict, conv: dict, model_out: dict) -> list[dict]:
         answer, warn = scoring.normalize_answer(c, x.get("answer"))
         if not x:
             warn = "Модель не вернула ответ по критерию"
-        ev = sorted({int(i) for i in (x.get("evidence") or []) if isinstance(i, (int, float)) and 1 <= int(i) <= n})
+        evidence = x.get("evidence")
+        evidence = evidence if isinstance(evidence, list) else []
         cf, ct = x.get("checked_from"), x.get("checked_to")
         checked = None
-        if isinstance(cf, int) and isinstance(ct, int) and 1 <= cf <= n:
-            checked = [cf, max(cf, min(ct, n))]
-        rows.append({
+        if type(cf) is int and type(ct) is int and 1 <= cf <= ct <= n:
+            checked = [cf, ct]
+        na_reason = x.get("na_reason") if answer == scoring.NA else None
+        allows_no_quote = (answer == scoring.NA and na_reason) or (
+            answer == "no" and (checked or c["type"] == "critical")
+        )
+        rows.append(check_evidence({
             "criterion_id": c["id"],
             "answer": answer,
             "explanation": x.get("explanation") or "",
             "analysis": x.get("analysis") or "",
-            "evidence": ev,
+            "evidence_quotes": evidence,
+            "evidence_missing": "Модель не привела цитату для этого вывода." if not evidence and not allows_no_quote else None,
             "checked_range": checked,
-            "na_reason": x.get("na_reason") if answer == scoring.NA else None,
+            "na_reason": na_reason,
             "warning": warn,
-        })
+        }, conv["transcript"]))
     return rows
 
 

@@ -48,10 +48,4 @@
 
 .acc-id { white-space: nowrap; }
 
-/* Layout fix (belongs in app.css): on narrow screens the single `1fr` column grew to the width of the
-   horizontally scrolling nav, so the whole page scrolled sideways once a fifth section was added. */
-@media (max-width: 760px) {
-  .layout { grid-template-columns: minmax(0, 1fr); }
-  .sidebar nav { min-width: 0; }
-}
 #acc-group, #acc-gt, #acc-crit { max-width: 100%; min-width: 0; }
