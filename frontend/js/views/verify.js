@@ -3,13 +3,13 @@
 // saved as a new ground-truth version that overlays only the reviewed dialogs
 // onto the latest version, so sequential saves by two reviewers merge.
 import { api } from "../api.js";
-import { esc, toast, confirmDialog, modal, busy, plural, icon, CHANNEL, TYPE_LABEL, fmtDate } from "../util.js";
+import { esc, toast, confirmDialog, modal, busy, plural, icon, TYPE_LABEL, fmtDate } from "../util.js";
 import { transcriptHtml, bindRuns } from "../card/transcript.js";
 import { cvIcon } from "../card/icons.js";
 
 const GROUP = "DEV";
 const KEY = `cqa.verify.${GROUP}.v1`;
-/** Fixed stratified random sample (language × channel). */
+/** Fixed stratified random sample (by language). */
 export const SAMPLE = [
   "p1-ru-004", "p1-ru-008", "p1-ru-011", "p1-ru-017", "p1-ru-020", "p1-ru-021", "p1-ru-028", "p1-ru-030",
   "p1-kz-007", "p1-kz-009", "p1-kz-010", "p1-kz-014", "p1-kz-015",
@@ -147,7 +147,6 @@ export async function render(root, params, query) {
       <nav class="card vf-list" aria-label="Диалоги для проверки"><div class="vf-list-in" id="vf-list"></div></nav>
       <section class="card vf-tr" aria-label="Транскрипт">
         <div class="card-head vf-tr-head" id="vf-tr-head"></div>
-        <div id="vf-audio"></div>
         <div class="cv-transcript vf-transcript" id="vf-transcript" tabindex="0" aria-label="Транскрипт диалога"></div>
       </section>
       <section class="card vf-crit-card" aria-label="Критерии">
@@ -218,14 +217,13 @@ export async function render(root, params, query) {
         const nCh = it && it.confirmedAt ? changedOf(it).length : 0;
         const o = others[id];
         const byOther = o && o.by && o.by !== who() ? o.by : "";
-        const isCall = m ? m.channel === "voice call" : false;
         return `
           <a class="vf-item${id === curId ? " is-current" : ""}" href="#/verify?id=${encodeURIComponent(id)}" data-id="${esc(id)}" ${id === curId ? 'aria-current="true"' : ""}>
             <span class="vf-dot vf-st-${s}" aria-hidden="true"></span>
             <span class="vf-item-main">
               <span class="vf-item-id"><span class="vf-idx num-t">${i + 1}.</span> ${esc(id)}</span>
               <span class="vf-item-sub">
-                ${m ? `<span class="lang">${esc(m.language)}</span><span class="vf-chan" title="${esc(CHANNEL[m.channel] || m.channel || "")}">${icon(isCall ? "phone" : "chat")}</span>` : `<span class="vf-miss">нет в наборе</span>`}
+                ${m ? `<span class="lang">${esc(m.language)}</span>` : `<span class="vf-miss">нет в наборе</span>`}
                 <span class="vf-item-st vf-t-${s}" title="Ваша проверка в этом браузере">вы: ${esc(STATUS[s])}${s === "fixed" ? ` · ${nCh}` : ""}${isUnsaved(it) ? ` <span class="vf-unsaved-dot" title="Не сохранено в эталон">●</span>` : ""}</span>
               </span>
               ${byOther ? `<span class="vf-item-other" title="Уже проверено и сохранено в эталоне">в эталоне: проверил(а) ${esc(byOther)}</span>` : ""}
@@ -243,16 +241,14 @@ export async function render(root, params, query) {
 
   // ---------- transcript ----------
   async function paintTranscript(id, token) {
-    const head = $("#vf-tr-head"), tr = $("#vf-transcript"), au = $("#vf-audio");
+    const head = $("#vf-tr-head"), tr = $("#vf-transcript");
     const m = convMeta[id] || {};
     head.innerHTML = `
       <h2 class="vf-tr-title">${esc(id)}</h2>
       ${m.language ? `<span class="lang">${esc(m.language)}</span>` : ""}
-      ${m.channel ? `<span class="vf-chan">${icon(m.channel === "voice call" ? "phone" : "chat")}${esc(CHANNEL[m.channel] || m.channel)}</span>` : ""}
       ${m.messages ? `<span class="muted small">${m.messages} ${plural(m.messages, ["реплика", "реплики", "реплик"])}</span>` : ""}
       <div class="spacer"></div>
       <a class="btn btn-sm btn-ghost" href="#/conversation/${encodeURIComponent(id)}" target="_blank" rel="noopener">${cvIcon("external")}Открыть разбор<span class="cv-sr"> (в новой вкладке)</span></a>`;
-    au.innerHTML = "";
     tr.innerHTML = `<div class="vf-loading muted"><span class="spinner"></span> Загрузка диалога…</div>`;
     let conv = convCache.get(id);
     if (!conv) {
@@ -264,10 +260,6 @@ export async function render(root, params, query) {
       }
     }
     if (token !== selSeq) return;
-    const isCall = conv.channel === "voice call" || !!conv.audio_url;
-    if (isCall) {
-      au.innerHTML = `<div class="vf-audio">${icon("phone")}<audio controls preload="none" src="${esc(api.audioUrl(id))}" aria-label="Запись звонка ${esc(id)}"></audio></div>`;
-    }
     const msgs = conv.transcript || [];
     tr.innerHTML = msgs.length
       ? transcriptHtml(msgs, { idPrefix: "vf-msg-" })

@@ -1,5 +1,5 @@
 import { api } from "../api.js";
-import { esc, $, fmtNum, scoreClass, LANG, CHANNEL, plural, icon, pct } from "../util.js";
+import { esc, $, fmtNum, scoreClass, LANG, plural, icon, pct } from "../util.js";
 
 const st = { group: "", checklist_id: "" };
 const LANG_ORDER = ["RU", "KZ", "EN"];
@@ -124,10 +124,6 @@ function hbars(entries, labelOf) {
 function charts(s, rows, done, cfg, cl) {
   const byLang = Object.entries(s.by_language || {})
     .sort(([a], [b]) => (LANG_ORDER.indexOf(a) + 1 || 99) - (LANG_ORDER.indexOf(b) + 1 || 99) || a.localeCompare(b));
-  const chanMap = {};
-  done.forEach((r) => { (chanMap[r.channel || "—"] ||= []).push(Number(r.final_total)); });
-  const byChan = Object.entries(chanMap).map(([k, xs]) => [k, { n: xs.length, avg: xs.reduce((a, b) => a + b, 0) / xs.length }])
-    .sort((a, b) => b[1].n - a[1].n);
 
   const hist = s.histogram || [];
   const histMax = Math.max(1, ...hist);
@@ -209,14 +205,10 @@ function charts(s, rows, done, cfg, cl) {
     </div>`;
 
   return `
-    <div class="an-grid-3">
+    <div class="an-grid-2">
       <div class="card card-pad">
         <div class="card-title">Средний итог по языкам</div>
         ${hbars(byLang, (k) => ({ label: k, sub: LANG[k] || "" }))}
-      </div>
-      <div class="card card-pad">
-        <div class="card-title">Средний итог по каналам</div>
-        ${hbars(byChan, (k) => ({ label: CHANNEL[k] || k, sub: "" }))}
       </div>
       <div class="card card-pad">
         <div class="card-title">Распределение итоговых баллов <span class="muted">${s.evaluated} ${plural(s.evaluated, ["диалог", "диалога", "диалогов"])}</span></div>

@@ -46,7 +46,6 @@ export const api = {
 
   conversations: (params = {}) => req("GET", "/api/conversations" + qs(params)),
   conversation: (id) => req("GET", `/api/conversations/${encodeURIComponent(id)}`),
-  audioUrl: (id) => `${base()}/api/audio/${encodeURIComponent(id)}`,
   groundTruth: () => req("GET", "/api/ground-truth"),
   groundTruthGet: (id) => req("GET", `/api/ground-truth/${encodeURIComponent(id)}`),
   uploadGroundTruth: (group, text, note) =>

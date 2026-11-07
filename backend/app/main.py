@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, StringConstraints
 
-from . import accuracy, audio, config, dataset, db, evaluator, regulations, rule_checks, scoring, version
+from . import accuracy, config, dataset, db, evaluator, regulations, rule_checks, scoring, version
 
 _bg: set[asyncio.Task] = set()
 
@@ -150,20 +150,6 @@ async def list_conversations(group: str | None = None, checklist_id: int | None 
                WHERE ($1::text IS NULL OR c.dataset_group=$1)
                ORDER BY c.id""", group, checklist_id, include_criteria)
     return db.recs(rows)
-
-
-@app.get("/api/audio/{cid}")
-async def get_audio(cid: str):
-    """Call recording as a seekable mp3 (Range requests), cached locally; the organizer link expires hourly."""
-    async with db.pool.acquire() as conn:
-        url = await conn.fetchval("SELECT audio_url FROM conversations WHERE id=$1", cid)
-    if not url:
-        not_found("Запись звонка")
-    try:
-        path = await audio.cached_file(cid, url)
-    except audio.AudioError as e:
-        raise HTTPException(502, str(e))
-    return FileResponse(path, media_type="audio/mpeg", headers={"Cache-Control": "private, max-age=86400"})
 
 
 @app.get("/api/conversations/{cid}")

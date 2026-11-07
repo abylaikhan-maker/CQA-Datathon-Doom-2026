@@ -59,7 +59,7 @@ def compute(cfg: dict, labels: dict, rows: list[dict]) -> dict:
         lab = labels[r["id"]]
         unsure = set(lab.get("_uncertain") or [])
         model = {x["criterion_id"]: x for x in r.get("criteria") or []}
-        keys = [f"Язык: {r.get('language') or '—'}", f"Канал: {r.get('channel') or '—'}"]
+        keys = [f"Язык: {r.get('language') or '—'}"]
         if lab.get("_kind"):
             keys.append(f"Тип: {lab['_kind']}")
         mism = []

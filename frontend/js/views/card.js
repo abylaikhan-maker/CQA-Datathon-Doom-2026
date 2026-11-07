@@ -1,11 +1,10 @@
-// Conversation card: transcript (chat), call player with a speaker timeline,
+// Conversation card: transcript,
 // the evaluation panel (score ring, why the score dropped, criteria, appeals)
 // and the regulation check below.
 // Deep link: #/conversation/<id>?eval=<id>&crit=<criterionId>&msg=<n>&checklist=<id>&compare=<evalId>
 import { api } from "../api.js";
-import { esc, $, $$, fmtNum, fmtDate, toast, busy, modal, answerView, tsSeconds, fmtClock, LANG, CHANNEL, icon } from "../util.js";
+import { esc, $, $$, fmtNum, fmtDate, toast, busy, modal, answerView, tsSeconds, fmtClock, LANG, icon } from "../util.js";
 import { refreshBadge } from "../app.js";
-import { createPlayer, buildSegments, audioTimeline } from "../card/player.js";
 import { transcriptHtml, scrollInBox, revealMsg, collapseAuto, bindRuns } from "../card/transcript.js";
 import { mountRegulation } from "../card/regulation.js";
 import { ringHtml, critHtml, lossesHtml, lossItems, metaHtml, loadingHtml, updateLoading, firstRef, plural, icHtml, scoreBadgeHtml, isRevised, changeReview } from "../card/score.js";
@@ -28,45 +27,38 @@ export async function render(root, params, query) {
   const seconds = conv.transcript.map((m) => tsSeconds(m.timestamp, first));
   const known = seconds.filter((s) => s !== null && s !== undefined);
   const duration = known.length ? Math.max(...known) : null;
-  const isCall = conv.channel === "voice call" || !!conv.audio_url;
   const history = conv.evaluations.find((ev) => ev.id === Number(query.eval)) || conv.evaluations[0];
   const selected = checklists.find((c) => c.id === Number(query.checklist))
     || checklists.find((c) => c.is_active) || checklists[0];
   const hasCtx = conv.transcript.some((m) => !["client", "operator"].includes(String(m.speaker || "").toLowerCase()));
 
-  // For calls, message positions are in recording time (start / cut pause / lead), not transcript time.
-  const clock = (arr) => arr.map((s) => (s === null || s === undefined ? null : fmtClock(s)));
-  const audioSec = isCall && conv.audio_url ? audioTimeline(conv.transcript, seconds, null) : seconds;
   ctx = {
-    root, conv, checklists, seconds: audioSec, isCall, evaluation: null, player: null,
+    root, conv, checklists, evaluation: null,
     checklistId: selected ? selected.id : null, pinnedChecklist: !!query.checklist, clCache: new Map(),
     openCrit: query.crit || null, compareId: Number(query.compare) || null,
-    whyExpanded: false, followUntil: 0, loadingTimer: null, pollTimer: null,
-    rel: isCall ? clock(audioSec) : null, keep: new Set(),
+    whyExpanded: false, loadingTimer: null, pollTimer: null,
+    rel: null, keep: new Set(),
   };
   const mine = ctx;
   const cleanup = () => {
     if (mine.regulation) mine.regulation();
-    if (mine.player) mine.player.destroy();
     clearInterval(mine.loadingTimer);
     clearTimeout(mine.pollTimer);
     if (ctx === mine) ctx = null;
   };
 
-  const chan = CHANNEL[conv.channel] || conv.channel || (isCall ? "Звонок" : "Чат");
   const n = conv.transcript.length;
   root.innerHTML = `
     <div class="cv-page">
-    <div class="crumbs"><a href="#/conversations">Разговоры</a> / ${esc(conv.title?.trim() || (isCall ? "Разбор звонка" : "Разбор чата"))}</div>
+    <div class="crumbs"><a href="#/conversations">Разговоры</a> / ${esc(conv.title?.trim() || "Разбор разговора")}</div>
     <header class="cv-head">
       <div class="cv-id">
-        <span class="cv-id-ic cv-id-${isCall ? "call" : "chat"}" aria-hidden="true">${cvIcon(isCall ? "phone" : "chat")}</span>
+        <span class="cv-id-ic cv-id-chat" aria-hidden="true">${cvIcon("chat")}</span>
         <div class="cv-id-main">
-          <h1 class="cv-id-title"><span class="cv-sr">${esc(chan)} </span>${esc(conv.id)}</h1>
+          <h1 class="cv-id-title"><span class="cv-sr">Разговор </span>${esc(conv.id)}</h1>
           <ul class="cv-facts" aria-label="О диалоге">
-            <li>${cvIcon(isCall ? "phone" : "chat")}${esc(chan)}</li>
             ${conv.language ? `<li>${cvIcon("globe")}${esc(LANG[conv.language] || conv.language)}</li>` : ""}
-            ${duration ? `<li title="${isCall ? "Длительность разговора по меткам расшифровки; запись звонка может быть длиннее" : "Длительность по меткам времени"}">${cvIcon("clock")}${isCall ? "разговор " : ""}${fmtClock(duration)}</li>` : ""}
+            ${duration ? `<li title="Длительность по меткам времени">${cvIcon("clock")}${fmtClock(duration)}</li>` : ""}
             <li>${cvIcon("msgs")}${n} ${plural(n, "реплика", "реплики", "реплик")}</li>
             ${conv.dataset_group ? `<li title="Набор данных">${cvIcon("list")}набор ${esc(conv.dataset_group)}</li>` : ""}
           </ul>
@@ -76,7 +68,6 @@ export async function render(root, params, query) {
       <div class="cv-eval-ctl" id="cv-eval-ctl"></div>
     </header>
     <div id="cv-version-ready" class="qa-handoff" hidden></div>
-    ${isCall ? `<div id="cv-player-host"></div>` : ""}
     <div class="cv-grid" id="cv-grid">
       <section class="card cv-tr-card" aria-label="Расшифровка">
         <div class="card-head cv-tr-head">
@@ -87,9 +78,8 @@ export async function render(root, params, query) {
         </div>
         <div class="cv-tr-ctx" id="cv-tr-ctx" hidden></div>
         <div class="cv-transcript" id="transcript" data-filter="all" tabindex="0" aria-label="Реплики диалога">
-          ${transcriptHtml(conv.transcript, { secs: audioSec, playable: isCall && !!conv.audio_url })}
+          ${transcriptHtml(conv.transcript, { secs: seconds })}
         </div>
-        <button type="button" class="cv-follow" id="cv-follow" hidden>${cvIcon("arrowDown")}К текущей реплике</button>
       </section>
       <section class="card cv-ev-card" id="eval-panel" aria-label="Оценка качества" tabindex="-1"></section>
     </div>
@@ -98,19 +88,6 @@ export async function render(root, params, query) {
 
   const tr = $("#transcript", root);
   bindRuns(tr);
-  tr.addEventListener("click", (e) => {
-    const p = e.target.closest("[data-play]");
-    if (p) playAt(Number(p.dataset.play));
-  });
-  // Manual scrolling pauses karaoke auto-follow for a few seconds.
-  const pauseFollow = () => { if (ctx) ctx.followUntil = Date.now() + 6000; };
-  ["wheel", "touchmove", "keydown", "mousedown"].forEach((t) => tr.addEventListener(t, pauseFollow, { passive: true }));
-  $("#cv-follow", root).addEventListener("click", () => {
-    ctx.followUntil = 0;
-    $("#cv-follow", root).hidden = true;
-    const el = playingEl();
-    if (el) scrollInBox(tr, el);
-  });
   $$("[data-filter]", root).forEach((b) => b.addEventListener("click", () => setFilter(b.dataset.filter)));
   $("#cv-tr-ctx", root).addEventListener("click", (e) => {
     if (e.target.closest("[data-clear]")) toggleCrit(ctx.openCrit);
@@ -137,30 +114,6 @@ export async function render(root, params, query) {
     }
   });
 
-  if (isCall) {
-    const mineCtx = ctx;
-    ctx.player = createPlayer($("#cv-player-host", root), {
-      // The organizer link is an HTML page with an hourly-expiring mp3 link; the backend caches the file.
-      audioUrl: conv.audio_url ? api.audioUrl(conv.id) : null,
-      sourceUrl: conv.audio_url || null,
-      segments: buildSegments(conv.transcript, audioSec),
-      retime: (duration) => {
-        // The real file length tells how much of the recording pause was cut out.
-        const sec = audioTimeline(conv.transcript, seconds, duration);
-        mineCtx.seconds = sec;
-        mineCtx.rel = clock(sec);
-        $$("[data-play]", root).forEach((b) => {
-          const s = sec[Number(b.dataset.play) - 1];
-          if (s === null || s === undefined) return;
-          b.lastChild.textContent = fmtClock(s);
-          b.setAttribute("aria-label", `Прослушать реплику #${b.dataset.play} с ${fmtClock(s)}`);
-        });
-        return buildSegments(conv.transcript, sec);
-      },
-      onSegment: (n) => focusMsg(n, { seek: false }),
-      onActive: (n, isPlaying) => karaoke(n, isPlaying),
-    });
-  }
 
   ctx.regulation = mountRegulation({ root, convId: conv.id, focusMsg: (n, opts) => { if (ctx === mine) focusMsg(n, opts); } });
 
@@ -206,17 +159,8 @@ function setFilter(key) {
   $$("[data-filter]", ctx.root).forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.filter === key)));
 }
 
-function playAt(n) {
-  const s = ctx.seconds[n - 1];
-  focusMsg(n, { seek: false });
-  if (!ctx.player || s === null || s === undefined) return;
-  if (!ctx.player.hasAudio()) { toast("Запись недоступна в браузере — откройте её по ссылке «Открыть в плеере»", true); return; }
-  ctx.followUntil = 0;
-  ctx.player.seekTo(s, { autoplay: true });
-}
-
-/** Highlight + scroll to a message. For calls the recording is positioned there too. */
-function focusMsg(n, { seek = true, scroll = true, page = false } = {}) {
+/** Highlight + scroll to a message. */
+function focusMsg(n, { scroll = true, page = false } = {}) {
   if (!ctx) return;
   const el = $(`#msg-${n}`, ctx.root);
   if (!el) return;
@@ -230,42 +174,14 @@ function focusMsg(n, { seek = true, scroll = true, page = false } = {}) {
   // restart the flash animation
   el.classList.remove("is-flash"); void el.offsetWidth; el.classList.add("is-flash");
   if (scroll) {
-    ctx.followUntil = Date.now() + 4000;
     scrollInBox(tr, el);
     // Explicit jumps also bring the transcript itself into view (single-column / mobile layout).
     const r = tr.getBoundingClientRect();
     if (page && (r.bottom < 80 || r.top > window.innerHeight - 80)) $(".cv-tr-card", ctx.root).scrollIntoView({ block: "start", behavior: scrollBehavior() });
   }
-  if (ctx.player) {
-    ctx.player.setMarks({ focus: n });
-    if (seek && ctx.player.hasAudio()) ctx.player.seekTo(ctx.seconds[n - 1], { autoplay: false });
-  }
 }
 
 const matchesFilter = (el, f) => f === "all" || (f === "ctx" ? !["client", "operator"].includes(el.dataset.sp) : el.dataset.sp === f);
-
-/** The element that represents the playing message: the message, or its collapsed run. */
-function playingEl() {
-  const el = ctx && $(".cv-msg.is-playing", ctx.root);
-  return el ? el.closest(".cv-run.is-collapsed") || el : null;
-}
-
-function karaoke(n, isPlaying) {
-  if (!ctx) return;
-  $$(".cv-msg.is-playing, .cv-run.is-playing", ctx.root).forEach((m) => m.classList.remove("is-playing"));
-  if (!n) return;
-  const el = $(`#msg-${n}`, ctx.root);
-  if (!el) return;
-  el.classList.add("is-playing");
-  // Inside a collapsed context run: light up the run row instead of expanding it mid-playback.
-  const tr = $("#transcript", ctx.root);
-  const run = el.closest(".cv-run.is-collapsed");
-  if (run) run.classList.add("is-playing");
-  if (!isPlaying) return;
-  const follow = $("#cv-follow", ctx.root);
-  if (Date.now() >= ctx.followUntil) { scrollInBox(tr, run || el); follow.hidden = true; }
-  else follow.hidden = false;
-}
 
 function markEvidence(row, crit, { announce = true } = {}) {
   $$(".cv-msg.is-evidence, .cv-msg.in-range", ctx.root).forEach((m) => m.classList.remove("is-evidence", "in-range"));
@@ -290,7 +206,6 @@ function markEvidence(row, crit, { announce = true } = {}) {
     });
     range.forEach((n) => $(`#msg-${n}`, ctx.root)?.classList.add("in-range"));
   }
-  if (ctx.player) ctx.player.setMarks({ evidence, range, focus: null });
   const ev = evidence.length;
   if (!row || !crit || !announce || (!ev && !range.length)) { bar.hidden = true; bar.innerHTML = ""; return; }
   bar.hidden = false;

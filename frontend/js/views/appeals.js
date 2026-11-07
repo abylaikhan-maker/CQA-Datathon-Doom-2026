@@ -1,6 +1,6 @@
 // Appeals: list (open / resolved tabs) and the reviewer's decision page.
 import { api } from "../api.js";
-import { esc, $, $$, fmtNum, fmtDate, toast, busy, answerView, answerOptions, LANG, CHANNEL } from "../util.js";
+import { esc, $, $$, fmtNum, fmtDate, toast, busy, answerView, answerOptions, LANG } from "../util.js";
 import { refreshBadge } from "../app.js";
 import { msgHtml } from "../card/transcript.js";
 import { icHtml, plural } from "../card/score.js";
@@ -99,7 +99,7 @@ function rowHtml(a, showCase) {
       <div class="ap-cell-status">${statusHtml(a.status)}<span class="ap-id">#${a.id}</span></div>
       <div class="ap-cell-crit">
         <div class="ap-crit">${a.criterion_code ? `<span class="cv-code">${esc(a.criterion_code)}</span>` : ""}${esc(a.criterion_title || a.criterion_id)}</div>
-        <div class="ap-dialog"><span class="mono">${esc(a.conversation_id)}</span>${a.channel ? `<span>${esc(CHANNEL[a.channel] || a.channel)}</span>` : ""}${a.language ? `<span>${esc(LANG[a.language] || a.language)}</span>` : ""}</div>
+        <div class="ap-dialog"><span class="mono">${esc(a.conversation_id)}</span>${a.language ? `<span>${esc(LANG[a.language] || a.language)}</span>` : ""}</div>
       </div>
       <div class="ap-cell-comment">
         ${showCase ? `<span class="cv-tag is-brand">${esc(CASE_CATEGORIES[a.case_details.category])}</span>` : ""}
@@ -163,7 +163,6 @@ async function renderDetail(root, id) {
   const disputed = a.original_answer;
   const ptsNow = pointsFor(crit, disputed, srowFinal);
   const maxNow = srowFinal && srowFinal.max_points !== null ? srowFinal.max_points : crit.type === "critical" ? null : crit.weight;
-  const chan = CHANNEL[conv.channel] || conv.channel || "";
 
   const scaleList = crit.type === "scale" ? `
     <div class="ap-sec-h">Шкала критерия</div>
@@ -184,7 +183,6 @@ async function renderDetail(root, id) {
         <div class="ap-head-sub">
           ${statusHtml(a.status)}
           <a class="mono" href="${cardLink(row.evidence?.[0])}">${esc(conv.id)}</a>
-          ${chan ? `<span>${esc(chan)}</span>` : ""}
           ${conv.language ? `<span>${esc(LANG[conv.language] || conv.language)}</span>` : ""}
           <span>оценка #${ev.id}</span>
           <span>v${ev.checklist_version}, ${esc(ev.checklist_name)}</span>

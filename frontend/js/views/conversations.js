@@ -1,6 +1,6 @@
 import { api } from "../api.js";
 import {
-  esc, $, fmtNum, scoreClass, toast, busy, modal, LANG, CHANNEL,
+  esc, $, fmtNum, scoreClass, toast, busy, modal, LANG,
   plural, debounce, icon, pct, confirmDialog, answerView,
 } from "../util.js";
 
@@ -13,7 +13,7 @@ const store = {
 // Survives navigation to a card and back.
 const state = {
   group: store.get("cqa.group") || "", checklistId: null,
-  lang: "", channel: "", status: "", q: "", criterion: "", outcome: "",
+  lang: "", status: "", q: "",
   sort: { key: "id", dir: 1 },
 };
 let activePoll = null;
@@ -29,8 +29,6 @@ const STATUS = [
   { v: "error", label: "Ошибки оценки", test: (r) => r.status === "error" },
 ];
 const isNew = (r) => !r.eval_id || r.status === "error";
-const chanIcon = (c) => icon(c === "voice call" ? "phone" : "chat");
-const chanLabel = (c) => CHANNEL[c] || c || "—";
 const SORT_OPTIONS = [
   ["id:1", "Диалог ↑"], ["id:-1", "Диалог ↓"],
   ["score:-1", "Итог ↓"], ["score:1", "Итог ↑"],
@@ -55,7 +53,7 @@ export async function render(root) {
     <header class="page-head">
       <div>
         <h1>Разговоры</h1>
-        <div class="sub">Звонки и чаты службы поддержки: загрузите набор, выберите версию чек-листа и запустите оценку. Строка открывает разбор с объяснениями.</div>
+        <div class="sub">Обращения в службу поддержки (расшифровки): загрузите набор, выберите версию чек-листа и запустите оценку. Строка открывает разбор с объяснениями.</div>
       </div>
       <div class="spacer"></div>
       <div class="page-actions">
@@ -76,15 +74,19 @@ export async function render(root) {
           </select>
         </label>
       </div>
-      <div class="conv-tools">
-        <button class="btn filters-toggle" type="button" id="btn-filters" aria-expanded="false" aria-controls="filters">${icon("filter")}Фильтры<span class="n" id="filters-n" hidden></span></button>
-        <label class="field f-group">Набор
+      <div class="conv-filterbar" id="filters" role="group" aria-label="Фильтры">
+        <label class="field f-search">Поиск
+          <span class="input-icon">${icon("search")}<input class="input" type="search" id="f-q" placeholder="Тема или ID" value="${esc(state.q)}" autocomplete="off"></span></label>
+        <label class="field">Набор
           <select class="input" id="f-group">
             <option value="">Все наборы</option>
             ${groups.map((g) => `<option value="${esc(g.id)}" ${g.id === state.group ? "selected" : ""}>${esc(g.id)} (${g.count})</option>`).join("")}
           </select></label>
-        <label class="field f-search">Поиск
-          <span class="input-icon">${icon("search")}<input class="input" type="search" id="f-q" placeholder="Тема или ID" value="${esc(state.q)}" autocomplete="off"></span></label>
+        <label class="field">Язык<select class="input" id="f-lang"></select></label>
+        <label class="field">Статус<select class="input" id="f-status"></select></label>
+        <button class="btn btn-ghost btn-sm f-reset" type="button" data-reset hidden>${icon("x")}Сбросить</button>
+      </div>
+      <div class="conv-tools">
         <label class="field f-cl">Чек-лист для оценки
           <select class="input" id="f-checklist">
             ${checklists.map((c) => `<option value="${c.id}" ${c.id === state.checklistId ? "selected" : ""}>${esc(c.name)} · v${c.version}${c.is_active ? " (активный)" : ""}</option>`).join("")}
@@ -92,19 +94,6 @@ export async function render(root) {
         <div class="actions">
           <button class="btn btn-primary" type="button" id="btn-batch" title="Оценить диалоги без оценки выбранным чек-листом">${icon("play")}Оценить новые<span class="n" id="batch-n" hidden></span></button>
           <button class="btn" type="button" id="btn-rebatch" title="Заново оценить все диалоги выбранным чек-листом">${icon("refresh")}Переоценить все</button>
-        </div>
-      </div>
-      <div class="conv-filters" id="filters" role="group" aria-label="Фильтры"></div>
-      <div class="conv-criterion-filters" id="criterion-filters" role="group" aria-label="Фильтры по критериям" hidden>
-        <div class="field"><label for="f-criterion">Критерий</label><select class="input" id="f-criterion"></select></div>
-        <div class="field"><label for="f-outcome">Результат по критерию</label>
-          <select class="input" id="f-outcome" disabled>
-            <option value="">Все результаты</option>
-            <option value="issue">Есть замечание</option>
-            <option value="ok">Без замечаний</option>
-            <option value="na">Не применимо (N/A)</option>
-            <option value="missing">Нет результата</option>
-          </select>
         </div>
       </div>
       <div class="table-wrap" id="table" role="region" aria-label="Таблица разговоров" tabindex="0"></div>
@@ -116,8 +105,7 @@ export async function render(root) {
   let checklistConfig, loadedChecklistId, loadedGroup;
   let loadId = 0;
   const criteria = () => checklistConfig?.criteria || [];
-  const selectedCriterion = () => criteria().find((criterion) => criterion.id === state.criterion);
-  const filtersActive = () => !!(state.lang || state.channel || state.status || state.outcome || state.q.trim());
+  const filtersActive = () => !!(state.lang || state.status || state.q.trim());
 
   async function load() {
     const id = ++loadId;
@@ -133,20 +121,15 @@ export async function render(root) {
     checklistConfig = config;
     loadedChecklistId = checklistId;
     loadedGroup = group;
-    if (!selectedCriterion()) state.criterion = state.outcome = "";
-    drawCriterionFilters();
     draw();
   }
 
   function filtered(skip) {
     const q = state.q.trim().toLowerCase();
     const st = STATUS.find((s) => s.v === state.status);
-    const criterion = selectedCriterion();
     return rows.filter((r) =>
       (skip === "lang" || !state.lang || r.language === state.lang) &&
-      (skip === "channel" || !state.channel || r.channel === state.channel) &&
       (skip === "status" || !st?.test || st.test(r)) &&
-      (!criterion || !state.outcome || criterionResult(criterion, criterionScore(r, criterion)).outcome === state.outcome) &&
       (!q || r.id.toLowerCase().includes(q) || r.title?.toLowerCase().includes(q)));
   }
 
@@ -176,15 +159,11 @@ export async function render(root) {
     bn.hidden = !nNew;
     bn.textContent = nNew;
     $("#btn-batch", root).title = nNew ? `Оценить ${nNew} ${plural(nNew, ["диалог", "диалога", "диалогов"])} без оценки выбранным чек-листом` : "Все диалоги уже оценены этим чек-листом";
-    const nf = [state.group, state.lang, state.channel, state.status].filter(Boolean).length;
-    const nEl = $("#filters-n", root);
-    nEl.hidden = !nf;
-    nEl.textContent = nf;
     const foot = $("#foot", root);
     foot.innerHTML = rows.length ? `
       <span>Показано <b>${list.length}</b> из ${rows.length}</span>
       <span>Чек-лист: ${esc(clName(state.checklistId))}</span>
-      ${filtersActive() || state.criterion ? `<button class="btn-link" type="button" data-reset>Сбросить фильтры</button>` : ""}` : "";
+      ${filtersActive() ? `<button class="btn-link" type="button" data-reset>Сбросить фильтры</button>` : ""}` : "";
     foot.hidden = !rows.length;
   }
 
@@ -307,14 +286,13 @@ export async function render(root) {
     const crit = done.filter((r) => r.final_critical === "true").length;
     const open = list.reduce((s, r) => s + Number(r.open_appeals || 0), 0);
     const allAppeals = list.reduce((s, r) => s + Number(r.appeals || 0), 0);
-    const calls = list.filter((r) => r.channel === "voice call").length;
     const evalPct = pct(done.length, list.length);
     const sc = scoreClass(avg);
     k.innerHTML = `
       <div class="card kpi">
         <div class="lbl">${icon("list")}Диалогов</div>
         <div class="v">${list.length}${list.length !== rows.length ? `<small> из ${rows.length}</small>` : ""}</div>
-        <div class="foot meta-list"><span>чатов ${list.length - calls}</span><span>звонков ${calls}</span></div>
+        <div class="foot">${list.length !== rows.length ? "с учётом фильтров" : "в выбранном наборе"}</div>
       </div>
       <div class="card kpi">
         <div class="lbl">${icon("done")}Оценено</div>
@@ -338,54 +316,19 @@ export async function render(root) {
       </a>`;
   }
 
-  function chip(f, v, label, n, extra = "") {
-    const on = state[f] === v;
-    return `<button type="button" class="chip ${extra}" data-f="${f}" data-v="${esc(v)}" aria-pressed="${on}" ${!on && v && !n ? "disabled" : ""}>${label}${n !== undefined ? `<span class="n">${n}</span>` : ""}</button>`;
-  }
-
   function drawFilters() {
-    const f = $("#filters", root);
-    if (!rows.length) { f.innerHTML = ""; f.hidden = true; return; }
-    f.hidden = false;
-    const byLang = filtered("lang"), byChan = filtered("channel"), byStatus = filtered("status");
+    const byLang = filtered("lang"), byStatus = filtered("status");
     const langs = [...new Set(rows.map((r) => r.language).filter(Boolean))]
       .sort((a, b) => (LANG_ORDER.indexOf(a) + 1 || 99) - (LANG_ORDER.indexOf(b) + 1 || 99) || a.localeCompare(b));
-    const chans = [...new Set(rows.map((r) => r.channel).filter(Boolean))];
     const count = (list, fn) => list.filter(fn).length;
-    f.innerHTML = `
-      <div class="chips" role="group" aria-label="Язык"><span class="chips-label">Язык</span>
-        ${chip("lang", "", "Все")}
-        ${langs.map((l) => chip("lang", l, `<span title="${esc(LANG[l] || l)}">${esc(l)}</span>`, count(byLang, (r) => r.language === l))).join("")}
-      </div>
-      <div class="chips" role="group" aria-label="Канал"><span class="chips-label">Канал</span>
-        ${chip("channel", "", "Все")}
-        ${chans.map((c) => chip("channel", c, `${chanIcon(c)}${esc(chanLabel(c))}`, count(byChan, (r) => r.channel === c))).join("")}
-      </div>
-      <div class="chips" role="group" aria-label="Статус"><span class="chips-label">Статус</span>
-        ${STATUS.map((s) => chip("status", s.v, s.label, s.test ? count(byStatus, s.test) : undefined, s.cls || "")).join("")}
-      </div>`;
-  }
-
-  function drawCriterionFilters() {
-    const options = criteria();
-    const sections = checklistConfig?.sections || [];
-    const option = (c) => `<option value="${esc(c.id)}">${esc(criterionName(c))}</option>`;
-    const groups = sections.map((s) => {
-      const members = options.filter((c) => c.section === s.id);
-      return members.length ? `<optgroup label="${esc(s.title)}">${members.map(option).join("")}</optgroup>` : "";
-    });
-    const other = options.filter((c) => !sections.some((s) => s.id === c.section));
-    const select = $("#f-criterion", root);
-    select.innerHTML = `<option value="">Все критерии</option>${groups.join("")}${other.map(option).join("")}`;
-    select.value = state.criterion;
-    $("#criterion-filters", root).hidden = !rows.length || !options.length;
-    syncOutcomeFilter();
-  }
-
-  function syncOutcomeFilter() {
-    const select = $("#f-outcome", root);
-    select.disabled = !state.criterion;
-    select.value = state.outcome;
+    const opt = (v, label, n, cur) => `<option value="${esc(v)}" ${v === cur ? "selected" : ""} ${v && v !== cur && !n ? "disabled" : ""}>${esc(label)}${n !== undefined ? ` (${n})` : ""}</option>`;
+    $("#f-lang", root).innerHTML = opt("", "Все языки", byLang.length, state.lang)
+      + langs.map((l) => opt(l, LANG[l] || l, count(byLang, (r) => r.language === l), state.lang)).join("");
+    $("#f-status", root).innerHTML = STATUS.map((st) => opt(st.v, st.v ? st.label : "Все статусы",
+      st.test ? count(byStatus, st.test) : byStatus.length, state.status)).join("");
+    for (const id of ["f-lang", "f-status"]) $(`#${id}`, root).classList.toggle("is-set", !!$(`#${id}`, root).value);
+    $("#f-group", root).classList.toggle("is-set", !!state.group);
+    $("#filters .f-reset", root).hidden = !filtersActive();
   }
 
   function th(key, label, cls = "") {
@@ -426,7 +369,7 @@ export async function render(root) {
         <thead role="rowgroup"><tr role="row">
           ${th("id", "Разговор")}
           ${th("score", "Итог", "num")}
-          ${columns.map((c) => `<th role="columnheader" scope="col" class="criterion-col${c.id === state.criterion ? " is-selected" : ""}" title="${esc(criterionName(c))}" aria-label="${esc(criterionName(c))}">
+          ${columns.map((c) => `<th role="columnheader" scope="col" class="criterion-col" title="${esc(criterionName(c))}" aria-label="${esc(criterionName(c))}">
             ${c.code ? `<span class="criterion-code">${esc(c.code)}</span>` : ""}${esc(shortCriterionTitle(c))}
           </th>`).join("")}
         </tr></thead>
@@ -447,17 +390,13 @@ export async function render(root) {
   }
 
   function resetFilters() {
-    Object.assign(state, { lang: "", channel: "", status: "", q: "", criterion: "", outcome: "" });
+    Object.assign(state, { lang: "", status: "", q: "" });
     $("#f-q", root).value = "";
-    $("#f-criterion", root).value = "";
-    syncOutcomeFilter();
     draw();
   }
 
   // ---- events
   page.addEventListener("click", (e) => {
-    const chipBtn = e.target.closest("[data-f]");
-    if (chipBtn) { state[chipBtn.dataset.f] = chipBtn.dataset.v; draw(); return; }
     const sortBtn = e.target.closest("[data-sort]");
     if (sortBtn) {
       const key = sortBtn.dataset.sort;
@@ -495,12 +434,6 @@ export async function render(root) {
       $(".guide h2", root)?.scrollIntoView({ block: "nearest" });
       return;
     }
-    if (e.target.closest("#btn-filters")) {
-      const card = $(".conv-card", root), on = !card.classList.contains("show-filters");
-      card.classList.toggle("show-filters", on);
-      $("#btn-filters", root).setAttribute("aria-expanded", String(on));
-      return;
-    }
     const cta = e.target.closest("[data-cta]");
     if (cta) {
       if (cta.dataset.cta === "import") openImport();
@@ -516,13 +449,8 @@ export async function render(root) {
     load();
   });
   $("#f-checklist", root).addEventListener("change", (e) => { state.checklistId = Number(e.target.value); load(); });
-  $("#f-criterion", root).addEventListener("change", (e) => {
-    state.criterion = e.target.value;
-    state.outcome = "";
-    syncOutcomeFilter();
-    draw();
-  });
-  $("#f-outcome", root).addEventListener("change", (e) => { state.outcome = e.target.value; draw(); });
+  $("#f-lang", root).addEventListener("change", (e) => { state.lang = e.target.value; draw(); });
+  $("#f-status", root).addEventListener("change", (e) => { state.status = e.target.value; draw(); });
   $("#f-sort", root).addEventListener("change", (e) => {
     const [key, dir] = e.target.value.split(":");
     state.sort = { key, dir: Number(dir) };
@@ -674,7 +602,6 @@ function conversationCell(r, critical) {
   return `<a href="${cardHref(r)}">${esc(title || r.id)}</a>
     <div class="conv-row-meta">
       ${title ? `<span>${esc(r.id)}</span>` : ""}
-      <span class="chan">${chanIcon(r.channel)}${esc(chanLabel(r.channel))}</span>
       <span class="lang" title="${esc(LANG[r.language] || r.language || "")}">${esc(r.language || "—")}</span>
       <span>${fmtNum(r.messages, 0)} ${plural(Number(r.messages), ["реплика", "реплики", "реплик"])}</span>
     </div>
@@ -707,23 +634,20 @@ const shortCriterionTitle = (criterion) => SHORT_CRITERION_TITLES.get(criterion.
 const criterionName = (criterion) => criterion.code ? `${criterion.code} · ${criterion.title}` : criterion.title;
 const criterionScore = (row, criterion) => row.criterion_scores?.find((score) => score.criterion_id === criterion.id);
 
+/** Raw answer → what the table shows. Colour follows good/bad; for «грубая ошибка» «Да» means the error is present. */
 function criterionResult(criterion, score) {
-  if (score?.answer == null) return { outcome: "missing", kind: "missing", label: "—", detail: "Нет результата" };
-  const answer = answerView(criterion, score.answer);
-  if (answer.kind === "na") return { outcome: "na", kind: "na", label: answer.label, detail: "Не применимо (N/A)" };
-  const points = score.points == null || score.max_points == null
-    ? null : `${fmtNum(score.points)} / ${fmtNum(score.max_points)}`;
-  return {
-    outcome: answer.kind === "yes" ? "ok" : "issue",
-    kind: answer.kind,
-    label: points ?? answer.label,
-    detail: points ? `${points} балла` : answer.label,
-  };
+  if (score?.answer == null) return { kind: "missing", label: "—", detail: "Нет результата" };
+  const view = answerView(criterion, score.answer);
+  if (view.kind === "na") return { kind: "na", label: "N/A", detail: "Не применимо" };
+  const label = criterion.type === "critical" ? (score.answer === "yes" ? "Да" : "Нет")
+    : view.kind === "yes" ? "Да" : view.kind === "no" ? "Нет" : "Частично";
+  const points = score.points == null || score.max_points == null ? "" : ` · ${fmtNum(score.points)} из ${fmtNum(score.max_points)} балл.`;
+  return { kind: view.kind, label, detail: `${view.label}${points}` };
 }
 
 function criterionCell(row, criterion) {
   const result = criterionResult(criterion, criterionScore(row, criterion));
-  if (result.outcome === "missing") return '<span class="muted" aria-label="Нет результата">—</span>';
+  if (result.kind === "missing") return '<span class="muted" aria-label="Нет результата">—</span>';
   const label = esc(`${criterionName(criterion)} — ${result.detail}`);
   const href = `${cardHref(row)}&crit=${encodeURIComponent(criterion.id)}`;
   return `<a class="conv-criterion-score is-${result.kind}" href="${esc(href)}" title="${label}" aria-label="${label}">${esc(result.label)}</a>`;
