@@ -56,6 +56,10 @@ export const api = {
   radarRuns: (group) => req("GET", "/api/radar/runs" + qs({ group })),
   radarRun: (id) => req("GET", `/api/radar/runs/${id}`),
   startRadar: (group) => req("POST", "/api/radar/runs", { group }),
+  radarTasks: () => req("GET", "/api/radar/tasks"),
+  radarTask: (id) => req("GET", `/api/radar/tasks/${id}`),
+  createRadarTask: (body) => req("POST", "/api/radar/tasks", body),
+  setRadarTaskStatus: (id, status) => req("PATCH", `/api/radar/tasks/${id}`, { status }),
 
   checklists: () => req("GET", "/api/checklists"),
   checklist: (id) => req("GET", `/api/checklists/${id}`),
@@ -69,6 +73,8 @@ export const api = {
     req("DELETE", `/api/checklists/${id}/rule-examples` + qs({ criterion_id, conversation_id })),
   ruleCheck: (id, criterion_id) => req("GET", `/api/checklists/${id}/rule-check` + qs({ criterion_id })),
   runRuleCheck: (id, body) => req("POST", `/api/checklists/${id}/rule-check`, body),
+  ruleSuggestions: (id) => req("GET", `/api/checklists/${id}/rule-suggestions`),
+  suggestRule: (id, criterion_id) => req("POST", `/api/checklists/${id}/rule-suggestions`, { criterion_id }),
 
   evaluate: (conversation_id, checklist_id) => req("POST", "/api/evaluations", { conversation_id, checklist_id }),
   evaluation: (id) => req("GET", `/api/evaluations/${id}`),

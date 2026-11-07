@@ -116,6 +116,20 @@ CREATE TABLE IF NOT EXISTS radar_runs (
 CREATE UNIQUE INDEX IF NOT EXISTS radar_one_running_per_group_idx
     ON radar_runs (dataset_group) WHERE status = 'running';
 
+CREATE TABLE IF NOT EXISTS radar_tasks (
+    id             SERIAL PRIMARY KEY,
+    run_id         INT NOT NULL REFERENCES radar_runs(id),
+    group_index    INT NOT NULL CHECK (group_index >= 0),
+    title          TEXT NOT NULL,
+    category       TEXT NOT NULL,
+    affected_count INT NOT NULL CHECK (affected_count >= 2),
+    report         TEXT NOT NULL,
+    status         TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new', 'in_progress', 'fixed')),
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (run_id, group_index)
+);
+
 -- Hand-labelled reference answers per dataset group. Every upload is a new immutable version.
 -- Used only to measure accuracy; never sent to the model.
 CREATE TABLE IF NOT EXISTS ground_truth (

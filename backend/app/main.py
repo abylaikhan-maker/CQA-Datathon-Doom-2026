@@ -133,13 +133,14 @@ async def groups():
 
 # ----------------------------------------------------------- conversations ----
 @app.get("/api/conversations")
-async def list_conversations(group: str | None = None, checklist_id: int | None = None):
+async def list_conversations(group: str | None = None, checklist_id: int | None = None, include_criteria: bool = False):
     async with db.pool.acquire() as conn:
         rows = await conn.fetch(
             """SELECT c.id, c.dataset_group, c.channel, c.language, c.audio_url, c.raw->>'title' AS title,
                       jsonb_array_length(c.transcript) AS messages,
                       e.id AS eval_id, e.status, e.total, e.final_total, e.critical, e.checklist_id,
                       e.final_score->>'critical' AS final_critical, e.error,
+                      CASE WHEN $3::bool AND e.status='done' THEN e.final_score->'criteria' END AS criterion_scores,
                       (SELECT count(*) FROM appeals a WHERE a.evaluation_id=e.id AND a.status='open') AS open_appeals,
                       (SELECT count(*) FROM appeals a WHERE a.evaluation_id=e.id) AS appeals
                FROM conversations c
@@ -147,7 +148,7 @@ async def list_conversations(group: str | None = None, checklist_id: int | None 
                    SELECT * FROM evaluations e WHERE e.conversation_id=c.id
                      AND ($2::int IS NULL OR e.checklist_id=$2) ORDER BY e.id DESC LIMIT 1) e ON true
                WHERE ($1::text IS NULL OR c.dataset_group=$1)
-               ORDER BY c.id""", group, checklist_id)
+               ORDER BY c.id""", group, checklist_id, include_criteria)
     return db.recs(rows)
 
 

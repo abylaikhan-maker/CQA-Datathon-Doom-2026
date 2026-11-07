@@ -71,7 +71,7 @@ async function route() {
     a.classList.toggle("active", on);
     if (on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
   });
-  document.getElementById("reports-menu").classList.toggle("active", ["analytics", "accuracy", "radar"].includes(m.r.nav));
+  document.getElementById("reports-menu").classList.toggle("active", ["analytics", "accuracy"].includes(m.r.nav));
   document.title = `${m.r.title} · CQA`;
   const params = {};
   (m.r.keys || []).forEach((k, i) => (params[k] = decodeURIComponent(m.m[i + 1])));

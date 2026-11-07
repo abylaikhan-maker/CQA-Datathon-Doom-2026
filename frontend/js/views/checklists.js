@@ -111,6 +111,7 @@ export async function render(root, params, query = {}) {
             <button class="btn btn-sm" type="button" id="btn-json">${icon("code")}JSON</button>
           </div>
         </div>
+        ${current.id ? '<section class="card-pad rule-suggestions" id="rule-suggestions" aria-label="Предложения по правилам" hidden></section>' : ""}
         <div class="card-pad" id="editor"></div>
         <div class="save-bar" id="save-bar"></div>
       </section>
@@ -151,19 +152,18 @@ export async function render(root, params, query = {}) {
   $("#btn-json", page).addEventListener("click", () => jsonDialog(page, current));
 
   const editor = $("#editor", page);
+  const suggestionAppeals = new Set();
   drawEditor(editor);
-  $("#focus-feedback-rule", page)?.addEventListener("click", () => {
-    const index = draft.criteria.indexOf(target);
-    if (index < 0) return;
-    openSet.add(target);
-    drawEditor(editor);
-    $(`[data-k="criteria.${index}.guidance"]`, editor)?.focus();
-  });
+  $("#focus-feedback-rule", page)?.addEventListener("click", () => focusGuidance(editor, target));
+  const suggestionSection = $("#rule-suggestions", page);
+  if (suggestionSection) loadRuleSuggestions(suggestionSection, current, editor, suggestionAppeals);
   editor.addEventListener("input", (e) => onInput(e, editor));
   editor.addEventListener("change", (e) => onChange(e, editor));
   editor.addEventListener("click", (e) => onClick(e, editor));
   $("#save-bar", page).addEventListener("click", (e) => {
-    if (e.target.closest("[data-act=save]")) openSave(page, current, list, conversation ? returnToDialog : null, source?.id);
+    if (e.target.closest("[data-act=save]")) {
+      openSave(page, current, list, conversation ? returnToDialog : null, source?.id, [...suggestionAppeals]);
+    }
     if (e.target.closest("[data-act=show-err]")) revealFirstError(editor);
   });
 
@@ -171,6 +171,89 @@ export async function render(root, params, query = {}) {
   window.addEventListener("beforeunload", onUnload);
   offUnload = () => window.removeEventListener("beforeunload", onUnload);
   return offUnload;
+}
+
+function focusGuidance(editor, criterion) {
+  const index = draft.criteria.indexOf(criterion);
+  if (index < 0) return;
+  openSet.add(criterion);
+  drawEditor(editor);
+  $(`[data-k="criteria.${index}.guidance"]`, editor)?.focus();
+}
+
+async function loadRuleSuggestions(section, current, editor, suggestionAppeals) {
+  let result;
+  try {
+    result = await api.ruleSuggestions(current.id);
+  } catch {
+    if (section.isConnected) {
+      section.hidden = false;
+      section.textContent = "Не удалось загрузить предложения по правилам.";
+    }
+    return;
+  }
+  if (!section.isConnected) return;
+  const counts = new Map(result.items.map((item) => [item.criterion_id, item.case_count]));
+  const items = current.config.criteria.filter((c) => counts.has(c.id));
+  section.innerHTML = `
+    <h3>Предложения по правилам</h3>
+    <p class="muted small">После ${result.minimum_cases} пересмотренных оценок по разным диалогам Gemini может предложить уточнение к критерию.</p>
+    ${items.length ? `<ul class="rule-suggestion-list">${items.map((c) => {
+      const count = counts.get(c.id);
+      const ready = count >= result.minimum_cases;
+      const status = ready ? `${count} ${plural(count, ["диалог", "диалога", "диалогов"])}` : `${count} из ${result.minimum_cases} диалогов`;
+      return `<li><b>${esc(c.code || c.id)} · ${esc(c.title)}</b>
+        <span class="badge ${ready ? "brand" : "outline"}">${status}</span>
+        ${ready ? `<button type="button" class="btn btn-sm" data-suggest-rule="${esc(c.id)}">Предложить уточнение</button>` : ""}
+      </li>`;
+    }).join("")}</ul>` : '<p class="muted small">Для этой версии пока нет пересмотренных оценок по апелляциям.</p>'}`;
+  section.hidden = false;
+
+  let generating = false;
+  section.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-suggest-rule]");
+    if (!button || generating) return;
+    const id = button.dataset.suggestRule;
+    const original = current.config.criteria.find((c) => c.id === id);
+    const criterion = draft.criteria.find((c) => c.id === id);
+    const isOriginal = () => draft?.criteria.includes(criterion) && JSON.stringify(criterion) === JSON.stringify(original);
+    if (!isOriginal()) {
+      toast("Сохраните текущие изменения этого критерия перед запросом предложения.", true);
+      return;
+    }
+    generating = true;
+    busy(button, true, "Готовим предложение…");
+    try {
+      const proposal = await api.suggestRule(current.id, id);
+      if (!section.isConnected) return;
+      const links = proposal.appeal_ids.map((aid) => `<a href="#/appeals/${esc(aid)}" target="_blank" rel="noopener">#${esc(aid)}</a>`).join(", ");
+      const preview = modal({
+        title: `Предложение по критерию ${original.code || original.id}`,
+        cancelText: "Закрыть",
+        submitText: "Вставить в черновик",
+        body: `<p>${esc(proposal.reason)}</p>
+          ${proposal.addition ? `<blockquote class="rule-suggestion-text">${esc(proposal.addition)}</blockquote>` : ""}
+          <div class="muted small">Апелляции ${links}</div>`,
+        onSubmit: proposal.addition ? () => {
+          if (!section.isConnected || !isOriginal()) {
+            toast("Критерий в редакторе изменился. Откройте сохранённую версию и запросите уточнение снова.", true);
+            return;
+          }
+          criterion.guidance = [criterion.guidance?.trim(), proposal.addition].filter(Boolean).join("\n\n");
+          proposal.appeal_ids.forEach((aid) => suggestionAppeals.add(aid));
+          focusGuidance(editor, criterion);
+        } : null,
+      });
+      const dialog = $('[role="dialog"]', preview.el);
+      dialog.classList.add("modal-wide");
+      dialog.setAttribute("aria-label", `Предложение по критерию ${original.code || original.id}`);
+    } catch (error) {
+      if (section.isConnected) toast(error.message, true);
+    } finally {
+      generating = false;
+      busy(button, false);
+    }
+  });
 }
 
 /* ------------------------------------------------------------ model ---- */
@@ -653,7 +736,7 @@ function cleanConfig() {
   return cfg;
 }
 
-function openSave(page, current, list, returnToDialog, sourceAppealId) {
+function openSave(page, current, list, returnToDialog, sourceAppealId, suggestionAppeals) {
   const editor = $("#editor", page);
   const errs = validate();
   if (Object.keys(errs).length) {
@@ -666,7 +749,9 @@ function openSave(page, current, list, returnToDialog, sourceAppealId) {
   const sameName = list.filter((c) => c.name === cfg.name);
   const next = sameName.length ? Math.max(...sameName.map((c) => c.version)) + 1 : 1;
   const nameChanged = base && base.name !== cfg.name;
-  const note = [sourceAppealId ? `По апелляции #${sourceAppealId}` : "", base ? autoNote(d) : ""].filter(Boolean).join(" · ");
+  const appeals = [...new Set([sourceAppealId, ...suggestionAppeals].filter(Boolean))];
+  const originNote = appeals.length ? `По ${appeals.length === 1 ? "апелляции" : "апелляциям"} ${appeals.map((id) => `#${id}`).join(", ")}` : "";
+  const note = [originNote, base ? autoNote(d) : ""].filter(Boolean).join(" · ");
   const m = modal({
     title: `Сохранить «${cfg.name}» v${next}`,
     submitText: returnToDialog ? `Сохранить v${next} и вернуться` : `Сохранить v${next}`,
@@ -677,7 +762,7 @@ function openSave(page, current, list, returnToDialog, sourceAppealId) {
       ${base ? diffHtml(d) : ""}
       <label class="field">Комментарий к версии <span class="hint">виден в списке версий</span>
         <input class="input" id="sv-note" maxlength="300" value="${esc(note.slice(0, 300))}" placeholder="Что изменено и зачем"></label>
-      <label class="check"><input type="checkbox" id="sv-activate" ${returnToDialog ? "" : "checked"}> Сделать активной — выбирается по умолчанию для новых оценок</label>`,
+      <label class="check"><input type="checkbox" id="sv-activate" ${returnToDialog || suggestionAppeals.length ? "" : "checked"}> Сделать активной — выбирается по умолчанию для новых оценок</label>`,
     onSubmit: async (el) => {
       const ok = $("[data-ok]", el);
       busy(ok, true, "Сохранение…");
@@ -689,7 +774,9 @@ function openSave(page, current, list, returnToDialog, sourceAppealId) {
         if (returnToDialog) location.hash = returnToDialog(saved.id);
         else {
           location.hash = `#/checklists/${saved.id}`;
-          setTimeout(() => applyDialog({ id: saved.id, version: saved.version, config: saved.config || cfg, is_active: activate }, { justSaved: true }), 0);
+          if (!suggestionAppeals.length) {
+            setTimeout(() => applyDialog({ id: saved.id, version: saved.version, config: saved.config || cfg, is_active: activate }, { justSaved: true }), 0);
+          }
         }
       } finally { busy(ok, false); }
     },

@@ -1,13 +1,13 @@
-"""Stored runs of the complaint radar."""
+"""Stored runs of the complaint radar and their technical team queue."""
 
 from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
-from pydantic import BaseModel, StringConstraints
+from pydantic import BaseModel, Field, StringConstraints
 
 from . import config, db, evaluator, radar_analysis
 
@@ -18,6 +18,16 @@ CHUNK_SIZE = 5
 
 class RadarRequest(BaseModel):
     group: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+
+
+class TaskRequest(BaseModel):
+    run_id: int = Field(gt=0, le=2_147_483_647)
+    group_index: int = Field(ge=0, le=2_147_483_647)
+    report: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100_000)]
+
+
+class TaskStatusRequest(BaseModel):
+    status: Literal["new", "in_progress", "fixed"]
 
 
 async def _extract(run_id: int, conversations: list[dict]) -> tuple[list[dict], list[str]]:
@@ -139,15 +149,18 @@ async def _current_result(conn, result: dict) -> dict:
     transcripts = {row["id"]: row["transcript"] for row in rows}
     groups = []
     stale = 0
-    for group in result["groups"]:
+    for index, group in enumerate(result["groups"]):
         items = [
             item for item in group["items"]
             if _matches_client_turn(item, transcripts.get(item["conversation_id"], []))
         ]
         stale += len(group["items"]) - len(items)
         if len({item["conversation_id"] for item in items}) >= 2:
-            groups.append({**group, "items": items})
-    return {**result, "groups": groups, "stale_evidence": stale} if stale else result
+            groups.append({**group, "items": items, "source_group_index": index})
+    current = {**result, "groups": groups}
+    if stale:
+        current["stale_evidence"] = stale
+    return current
 
 
 @router.get("/runs/{run_id}")
@@ -159,3 +172,69 @@ async def get_run(run_id: int):
         if run["result"] is not None:
             run["result"] = await _current_result(conn, run["result"])
     return run
+
+
+@router.get("/tasks")
+async def list_tasks():
+    async with db.pool.acquire() as conn:
+        tasks = await conn.fetch(
+            """SELECT id, run_id, group_index, title, category, affected_count, status, created_at, updated_at
+               FROM radar_tasks ORDER BY id DESC"""
+        )
+    return db.recs(tasks)
+
+
+@router.post("/tasks")
+async def create_task(request: TaskRequest):
+    by_source = "SELECT * FROM radar_tasks WHERE run_id=$1 AND group_index=$2"
+    async with db.pool.acquire() as conn:
+        existing = await conn.fetchrow(by_source, request.run_id, request.group_index)
+        if existing is not None:
+            return db.rec(existing)
+
+        run = await conn.fetchrow("SELECT status, result FROM radar_runs WHERE id=$1", request.run_id)
+        if run is None:
+            raise HTTPException(404, "Результат анализа не найден.")
+        if run["status"] != "finished":
+            raise HTTPException(409, "Дождитесь завершения анализа.")
+
+        groups = (run["result"] or {}).get("groups", [])
+        if request.group_index >= len(groups):
+            raise HTTPException(404, "Инсайт не найден в этом анализе.")
+        result = await _current_result(conn, {"groups": [groups[request.group_index]]})
+        if not result["groups"]:
+            raise HTTPException(409, "Исходные реплики изменились. Обновите анализ перед отправкой инсайта.")
+
+        group = result["groups"][0]
+        task = await conn.fetchrow(
+            """INSERT INTO radar_tasks (run_id, group_index, title, category, affected_count, report)
+               VALUES ($1, $2, $3, $4, $5, $6)
+               ON CONFLICT (run_id, group_index) DO NOTHING RETURNING *""",
+            request.run_id, request.group_index, group["label"], group["category"],
+            len({item["conversation_id"] for item in group["items"]}), request.report,
+        )
+        if task is None:
+            task = await conn.fetchrow(by_source, request.run_id, request.group_index)
+    return db.rec(task)
+
+
+@router.get("/tasks/{task_id}")
+async def get_task(task_id: int):
+    async with db.pool.acquire() as conn:
+        task = await conn.fetchrow("SELECT * FROM radar_tasks WHERE id=$1", task_id)
+    if task is None:
+        raise HTTPException(404, "Задача не найдена.")
+    return db.rec(task)
+
+
+@router.patch("/tasks/{task_id}")
+async def update_task(task_id: int, request: TaskStatusRequest):
+    async with db.pool.acquire() as conn:
+        task = await conn.fetchrow(
+            """UPDATE radar_tasks SET status=$2, updated_at=CASE WHEN status<>$2 THEN now() ELSE updated_at END
+               WHERE id=$1 RETURNING *""",
+            task_id, request.status,
+        )
+    if task is None:
+        raise HTTPException(404, "Задача не найдена.")
+    return db.rec(task)

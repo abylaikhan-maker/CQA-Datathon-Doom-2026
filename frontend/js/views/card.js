@@ -163,10 +163,15 @@ export function onQuery(query) {
       updateChecklistControls();
     }
     const id = Number(query.eval);
+    const compareId = Number(query.compare) || null;
     if (id !== ctx.evaluation?.id && ctx.conv.evaluations.some((ev) => ev.id === id)) {
       ctx.openCrit = query.crit || null;
-      ctx.compareId = Number(query.compare) || null;
+      ctx.compareId = compareId;
       await loadEvaluation(id);
+    } else if (ctx.evaluation && compareId !== ctx.compareId) {
+      ctx.openCrit = query.crit || null;
+      ctx.compareId = compareId;
+      drawEvaluation(ctx.evaluation);
     } else if (query.crit && query.crit !== ctx.openCrit) {
       toggleCrit(query.crit, true, { focus: !query.msg });
     }
