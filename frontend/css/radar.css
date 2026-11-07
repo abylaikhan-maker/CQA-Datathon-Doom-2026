@@ -59,6 +59,10 @@
 .radar-problem-text strong { display: block; font-size: 16px; }
 .radar-category { color: var(--ink-2); font-size: 12px; }
 .radar-count { flex: none; }
+.radar-problem-actions { padding: 0 18px 12px 36px; }
+.radar-draft-text { line-height: 1.45; }
+.radar-draft-status { margin: 0; }
+.radar-draft-status:empty { display: none; }
 .radar-quotes { list-style: none; padding: 0; margin: 0; }
 .radar-quote {
   display: flex;
@@ -81,5 +85,6 @@
   .radar-problem > summary { align-items: flex-start; padding: 12px; gap: 9px; }
   .radar-problem > summary::before { margin-top: 10px; }
   .radar-problem-text strong { font-size: 14px; }
+  .radar-problem-actions { padding-inline: 27px 12px; }
   .radar-quote { flex-direction: column; gap: 8px; padding: 10px 12px 10px 27px; }
 }

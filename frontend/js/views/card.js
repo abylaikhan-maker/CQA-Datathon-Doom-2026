@@ -15,8 +15,6 @@ const FILTERS = [
   { key: "operator", label: "Оператор" },
   { key: "ctx", label: "Бот · система" },
 ];
-const OVERVIEW_CRITERIA = new Set(["c01", "c03", "c07"]);
-
 export async function render(root, params, query) {
   const [conv, checklists] = await Promise.all([api.conversation(params.id), api.checklists()]);
   // Superseded by a newer navigation: the router already detached this host.
@@ -415,10 +413,6 @@ function drawEvaluation(ev) {
   const losses = lossItems(ev, critCfg, scoreRows);
   const findings = critical.length ? critical : losses.slice(0, 1);
   const canAppeal = criteria.some((c) => !(appealsBy[c.id] || []).some((a) => a.status === "open"));
-  const overview = criteria.length <= 4 ? criteria : [...criteria]
-    .sort((a, b) => Number(!!rowsBy[b.id].evidence_review) - Number(!!rowsBy[a.id].evidence_review)
-      || Number(OVERVIEW_CRITERIA.has(b.id)) - Number(OVERVIEW_CRITERIA.has(a.id))).slice(0, 3);
-  const moreCriteria = criteria.filter((c) => !overview.includes(c));
   const criterionRow = (c) => critHtml({
     row: rowsBy[c.id], crit: c, srow: scoreRows[c.id], orow: origRows[c.id], appeals: appealsBy[c.id] || [],
     msgs: ctx.conv.transcript, rel: ctx.rel, canAppeal: true, open: ctx.openCrit === c.id,
@@ -460,8 +454,7 @@ function drawEvaluation(ev) {
     ${findings.length ? "" : `<p class="cv-no-finding">Грубых нарушений не выявлено</p>`}
     <div class="cv-crits" id="crit-list">
       <h3>Критерии проверки</h3>
-      ${overview.map(criterionRow).join("")}
-      ${moreCriteria.length ? `<details class="cv-more-criteria" ${previous ? "open" : ""}><summary>Остальные критерии (${moreCriteria.length})</summary>${moreCriteria.map(criterionRow).join("")}</details>` : ""}
+      ${criteria.map(criterionRow).join("")}
     </div>
     <button type="button" class="btn cv-appeal-main" data-appeal-all ${canAppeal ? "" : "disabled"}>Оспорить оценку</button>
     <details class="cv-score-details">
@@ -550,8 +543,6 @@ function toggleCrit(id, forceOpen = false, { focus = true, page = false } = {}) 
     c.querySelector(".cv-crit-body").hidden = true;
   });
   if (willOpen) {
-    const rest = el.closest(".cv-more-criteria");
-    if (rest) rest.open = true;
     el.classList.add("is-open");
     el.querySelector(".cv-crit-top").setAttribute("aria-expanded", "true");
     el.querySelector(".cv-crit-body").hidden = false;

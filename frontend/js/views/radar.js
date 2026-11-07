@@ -1,5 +1,5 @@
 import { api } from "../api.js";
-import { $, CHANNEL, LANG, busy, esc, fmtDate, fmtNum, icon, plural } from "../util.js";
+import { $, CHANNEL, LANG, busy, esc, fmtDate, fmtNum, icon, modal, plural } from "../util.js";
 
 const CATEGORIES = {
   access: "Вход и доступ",
@@ -36,8 +36,10 @@ function metric(label, value) {
   return `<div class="card card-pad radar-metric"><span>${label}</span><strong>${value}</strong></div>`;
 }
 
+const sourceHref = (item) => `#/conversation/${encodeURIComponent(item.conversation_id)}?msg=${encodeURIComponent(item.turn)}`;
+const affectedCount = (problem) => new Set(problem.items.map((item) => item.conversation_id)).size;
+
 function quoteRow(item) {
-  const href = `#/conversation/${encodeURIComponent(item.conversation_id)}?msg=${encodeURIComponent(item.turn)}`;
   return `<li class="radar-quote">
     <div class="radar-quote-main">
       <div class="radar-quote-meta">
@@ -47,13 +49,13 @@ function quoteRow(item) {
       </div>
       <blockquote>${esc(item.quote)}</blockquote>
     </div>
-    <a class="btn btn-sm radar-source" href="${esc(href)}">К реплике №${esc(item.turn)} ${icon("chev")}</a>
+    <a class="btn btn-sm radar-source" href="${esc(sourceHref(item))}">К реплике №${esc(item.turn)} ${icon("chev")}</a>
   </li>`;
 }
 
 function problemsHtml(groups) {
   return groups.map((problem, index) => {
-    const count = new Set(problem.items.map((item) => item.conversation_id)).size;
+    const count = affectedCount(problem);
     const noun = plural(count, ["диалог", "диалога", "диалогов"]);
     return `<details class="card radar-problem" ${index === 0 ? "open" : ""}>
       <summary>
@@ -63,9 +65,54 @@ function problemsHtml(groups) {
         </span>
         <span class="badge outline radar-count">${fmtNum(count, 0)} ${noun}</span>
       </summary>
+      <div class="radar-problem-actions">
+        <button class="btn btn-sm" type="button" data-radar-draft="${index}">Собрать черновик бага</button>
+      </div>
       <ul class="radar-quotes">${problem.items.map(quoteRow).join("")}</ul>
     </details>`;
   }).join("");
+}
+
+function openBugDraft(problem, run) {
+  const count = affectedCount(problem);
+  const sources = problem.items.map((item) => {
+    const url = new URL(sourceHref(item), window.location.href).href;
+    const channel = CHANNEL[item.channel] || item.channel;
+    return `- ${item.conversation_id} · ${channel} · реплика №${item.turn}\n  «${item.quote}»\n  ${url}`;
+  });
+  const draft = [
+    "Описание проблемы", problem.label,
+    `Категория · ${CATEGORIES[problem.category] || CATEGORIES.other}`,
+    "",
+    "Затронутые диалоги",
+    `${count} из ${run.done} обработанных · набор ${run.dataset_group} · прогон №${run.id}`,
+    "",
+    "Исходные реплики", ...sources,
+  ].join("\n");
+  const m = modal({
+    title: "Черновик бага",
+    cancelText: "Закрыть",
+    submitText: "Скопировать черновик",
+    body: `<label class="field">Текст для техкоманды
+      <textarea class="input radar-draft-text" id="radar-draft-text" rows="13">${esc(draft)}</textarea></label>
+      <p class="muted small radar-draft-status" id="radar-draft-status" role="status"></p>`,
+    onSubmit: async (el) => {
+      const input = $("#radar-draft-text", el);
+      const status = $("#radar-draft-status", el);
+      try {
+        await navigator.clipboard.writeText(input.value);
+        status.textContent = "Черновик скопирован.";
+      } catch {
+        input.focus();
+        input.select();
+        status.textContent = "Текст выделен. Скопируйте его вручную.";
+      }
+      return false;
+    },
+  });
+  const dialog = $('[role="dialog"]', m.el);
+  dialog.classList.add("modal-wide");
+  dialog.setAttribute("aria-label", "Черновик бага");
 }
 
 function warningsHtml(run) {
@@ -246,6 +293,12 @@ export async function render(root, params, query = {}) {
   }
 
   $("#radar-group", root).addEventListener("change", (event) => { location.hash = hrefFor(event.target.value); });
+  results.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-radar-draft]");
+    if (!button) return;
+    const problem = run?.result?.groups[Number(button.dataset.radarDraft)];
+    if (problem) openBugDraft(problem, run);
+  });
   runSelect.addEventListener("change", (event) => { location.hash = hrefFor(group.id, event.target.value); });
   refreshButton.addEventListener("click", refresh);
   runButton.addEventListener("click", async () => {
