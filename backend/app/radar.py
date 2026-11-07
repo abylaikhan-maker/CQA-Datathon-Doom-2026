@@ -71,7 +71,7 @@ async def _run(run_id: int, conversations: list[dict]) -> None:
                 result["groups"] = await radar_analysis.group_signals(signals)
     except Exception as exc:
         logger.warning("Radar run %s: analysis failed (%s)", run_id, type(exc).__name__)
-        error = "Не удалось завершить анализ радара. Попробуйте запустить его ещё раз."
+        error = "Не удалось завершить анализ жалоб. Попробуйте запустить его ещё раз."
     async with db.pool.acquire() as conn:
         await conn.execute(
             """UPDATE radar_runs SET status=$2, result=$3, error=$4, finished_at=now()
@@ -83,7 +83,7 @@ async def _run(run_id: int, conversations: list[dict]) -> None:
 @router.post("/runs")
 async def start_run(request: RadarRequest, background: BackgroundTasks):
     if config.effective_provider() != "gemini":
-        raise HTTPException(503, "Для запуска радара подключите Gemini.")
+        raise HTTPException(503, "Для анализа жалоб подключите Gemini.")
 
     async with db.pool.acquire() as conn:
         running = await conn.fetchrow(
@@ -155,7 +155,7 @@ async def get_run(run_id: int):
     async with db.pool.acquire() as conn:
         run = db.rec(await conn.fetchrow("SELECT * FROM radar_runs WHERE id=$1", run_id))
         if run is None:
-            raise HTTPException(404, "Анализ радара не найден.")
+            raise HTTPException(404, "Результат анализа не найден.")
         if run["result"] is not None:
             run["result"] = await _current_result(conn, run["result"])
     return run

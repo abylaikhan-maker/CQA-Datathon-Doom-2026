@@ -66,22 +66,22 @@ function problemsHtml(groups) {
         <span class="badge outline radar-count">${fmtNum(count, 0)} ${noun}</span>
       </summary>
       <div class="radar-problem-actions">
-        <button class="btn btn-sm" type="button" data-radar-draft="${index}">Собрать черновик бага</button>
+        <button class="btn btn-sm" type="button" data-radar-draft="${index}">Собрать инсайт</button>
       </div>
       <ul class="radar-quotes">${problem.items.map(quoteRow).join("")}</ul>
     </details>`;
   }).join("");
 }
 
-function openBugDraft(problem, run) {
+function openInsight(problem, run) {
   const count = affectedCount(problem);
   const sources = problem.items.map((item) => {
     const url = new URL(sourceHref(item), window.location.href).href;
     const channel = CHANNEL[item.channel] || item.channel;
     return `- ${item.conversation_id} · ${channel} · реплика №${item.turn}\n  «${item.quote}»\n  ${url}`;
   });
-  const draft = [
-    "Описание проблемы", problem.label,
+  const insight = [
+    `Инсайт · ${problem.label}`,
     `Категория · ${CATEGORIES[problem.category] || CATEGORIES.other}`,
     "",
     "Затронутые диалоги",
@@ -90,18 +90,18 @@ function openBugDraft(problem, run) {
     "Исходные реплики", ...sources,
   ].join("\n");
   const m = modal({
-    title: "Черновик бага",
+    title: "Инсайт",
     cancelText: "Закрыть",
-    submitText: "Скопировать черновик",
-    body: `<label class="field">Текст для техкоманды
-      <textarea class="input radar-draft-text" id="radar-draft-text" rows="13">${esc(draft)}</textarea></label>
+    submitText: "Скопировать инсайт",
+    body: `<label class="field">Текст инсайта
+      <textarea class="input radar-draft-text" id="radar-draft-text" rows="13">${esc(insight)}</textarea></label>
       <p class="muted small radar-draft-status" id="radar-draft-status" role="status"></p>`,
     onSubmit: async (el) => {
       const input = $("#radar-draft-text", el);
       const status = $("#radar-draft-status", el);
       try {
         await navigator.clipboard.writeText(input.value);
-        status.textContent = "Черновик скопирован.";
+        status.textContent = "Инсайт скопирован.";
       } catch {
         input.focus();
         input.select();
@@ -112,7 +112,7 @@ function openBugDraft(problem, run) {
   });
   const dialog = $('[role="dialog"]', m.el);
   dialog.classList.add("modal-wide");
-  dialog.setAttribute("aria-label", "Черновик бага");
+  dialog.setAttribute("aria-label", "Инсайт");
 }
 
 function warningsHtml(run) {
@@ -137,7 +137,7 @@ function reportHtml(run, group) {
       <div class="radar-progress-heading"><h2>Анализ выполняется</h2>
         <span>Обработано ${fmtNum(processed, 0)} из ${fmtNum(run.total, 0)}</span></div>
       <progress aria-label="Обработано диалогов" value="${processed}" max="${run.total}"></progress>
-      <p class="muted small">После обработки диалогов радар сгруппирует найденные жалобы.</p>
+      <p class="muted small">Найденные жалобы будут сгруппированы после обработки диалогов.</p>
     </section>`;
   }
   if (run.status === "error") {
@@ -178,7 +178,7 @@ export async function render(root, params, query = {}) {
 
   root.innerHTML = `<div class="radar-page">
     <div class="page-head">
-      <div><h1>Радар проблем</h1>
+      <div><h1>Сервис инсайтов</h1>
         <div class="sub">Повторяющиеся жалобы клиентов со ссылками на исходные реплики.</div></div>
       <div class="radar-actions">
         <label class="field">Набор диалогов
@@ -261,7 +261,7 @@ export async function render(root, params, query = {}) {
       if (next.status !== "running") drawControls();
       showFeedback();
     } catch {
-      showFeedback("Не удалось обновить ход анализа. Радар попробует ещё раз.");
+      showFeedback("Не удалось обновить ход анализа. Повторим запрос через несколько секунд.");
       delay = 6000;
     } finally {
       pending = false;
@@ -297,7 +297,7 @@ export async function render(root, params, query = {}) {
     const button = event.target.closest("[data-radar-draft]");
     if (!button) return;
     const problem = run?.result?.groups[Number(button.dataset.radarDraft)];
-    if (problem) openBugDraft(problem, run);
+    if (problem) openInsight(problem, run);
   });
   runSelect.addEventListener("change", (event) => { location.hash = hrefFor(group.id, event.target.value); });
   refreshButton.addEventListener("click", refresh);

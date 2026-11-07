@@ -22,7 +22,7 @@ const routes = [
   { re: /^\/appeals\/(\d+)$/, view: appeals, nav: "appeals", keys: ["id"], title: "Апелляции", skel: "split" },
   { re: /^\/accuracy$/, view: accuracy, nav: "accuracy", title: "Точность", skel: "list" },
   { re: /^\/analytics$/, view: analytics, nav: "analytics", title: "Аналитика", skel: "list" },
-  { re: /^\/radar$/, view: radar, nav: "radar", title: "Радар проблем", skel: "list" },
+  { re: /^\/radar$/, view: radar, nav: "radar", title: "Сервис инсайтов", skel: "list" },
 ];
 
 let cleanup = null;
