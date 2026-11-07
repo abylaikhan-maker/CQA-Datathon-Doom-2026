@@ -1316,3 +1316,14 @@ code, kbd, pre, samp, .mono { font-family: var(--font); font-variant-numeric: ta
 .conv-table td.criterion-col { text-align: center; }
 .conv-name-col { width: 20%; }
 .conv-table th.criterion-col { font-size: 12px; letter-spacing: -.01em; }
+
+/* Column filters in the table header (Разговоры). */
+.conv-colfilters th { position: static; padding: 6px 6px 8px; background: var(--surface-2); border-bottom: 1px solid var(--line-strong); }
+.col-filter { width: 100%; min-width: 0; padding: 4px 22px 4px 7px; min-height: 30px; font-size: 12px; font-weight: 600; background-position: right 5px center; }
+.col-filter.is-set { border-color: var(--brand-600); box-shadow: inset 0 0 0 1px var(--brand-600); color: var(--brand-ink); font-weight: 800; background-color: var(--brand-50); }
+.conv-empty-row { padding: 28px 16px !important; text-align: center; color: var(--ink-2); }
+.conv-empty-row .btn { margin-left: 10px; }
+/* Two header rows: the whole thead sticks, not each row on its own. */
+.conv-table th { position: static; }
+@media (min-width: 1000px) { .conv-table:not(.is-stacked) thead { position: sticky; top: 0; z-index: 2; } }
+.conv-total-col { width: 9%; }

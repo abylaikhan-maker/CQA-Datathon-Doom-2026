@@ -13,7 +13,7 @@ const store = {
 // Survives navigation to a card and back.
 const state = {
   group: store.get("cqa.group") || "", checklistId: null,
-  lang: "", status: "", q: "",
+  lang: "", status: "", q: "", band: "", cols: {},
   sort: { key: "id", dir: 1 },
 };
 let activePoll = null;
@@ -29,6 +29,15 @@ const STATUS = [
   { v: "error", label: "Ошибки оценки", test: (r) => r.status === "error" },
 ];
 const isNew = (r) => !r.eval_id || r.status === "error";
+const ANSWER_LABELS = ["Да", "Нет", "Частично", "N/A", "—"];
+const BANDS = [
+  { v: "hi", label: "≥ 85" }, { v: "mid", label: "65–85" }, { v: "lo", label: "< 65" }, { v: "none", label: "нет" },
+];
+const bandOf = (r) => {
+  if (r.status !== "done" || r.final_total == null) return "none";
+  const v = Number(r.final_total);
+  return v >= 85 ? "hi" : v >= 65 ? "mid" : "lo";
+};
 const SORT_OPTIONS = [
   ["id:1", "Диалог ↑"], ["id:-1", "Диалог ↓"],
   ["score:-1", "Итог ↓"], ["score:1", "Итог ↑"],
@@ -105,7 +114,8 @@ export async function render(root) {
   let checklistConfig, loadedChecklistId, loadedGroup;
   let loadId = 0;
   const criteria = () => checklistConfig?.criteria || [];
-  const filtersActive = () => !!(state.lang || state.status || state.q.trim());
+  const colActive = () => !!state.band || Object.values(state.cols).some(Boolean);
+  const filtersActive = () => !!(state.lang || state.status || state.q.trim()) || colActive();
 
   async function load() {
     const id = ++loadId;
@@ -121,6 +131,7 @@ export async function render(root) {
     checklistConfig = config;
     loadedChecklistId = checklistId;
     loadedGroup = group;
+    for (const k of Object.keys(state.cols)) if (!criteria().some((c) => c.id === k)) delete state.cols[k];
     draw();
   }
 
@@ -130,6 +141,8 @@ export async function render(root) {
     return rows.filter((r) =>
       (skip === "lang" || !state.lang || r.language === state.lang) &&
       (skip === "status" || !st?.test || st.test(r)) &&
+      (skip === "band" || !state.band || bandOf(r) === state.band) &&
+      criteria().every((c) => skip === `col:${c.id}` || !state.cols[c.id] || criterionResult(c, criterionScore(r, c)).label === state.cols[c.id]) &&
       (!q || r.id.toLowerCase().includes(q) || r.title?.toLowerCase().includes(q)));
   }
 
@@ -352,7 +365,7 @@ export async function render(root) {
         </div>`;
       return;
     }
-    if (!list.length) {
+    if (!list.length && !colActive()) {
       t.innerHTML = `
         <div class="empty-state">
           <div class="ic">${icon("filter")}</div>
@@ -372,8 +385,19 @@ export async function render(root) {
           ${columns.map((c) => `<th role="columnheader" scope="col" class="criterion-col" title="${esc(criterionName(c))}" aria-label="${esc(criterionName(c))}">
             ${c.code ? `<span class="criterion-code">${esc(c.code)}</span>` : ""}${esc(shortCriterionTitle(c))}
           </th>`).join("")}
+        </tr>
+        <tr role="row" class="conv-colfilters">
+          <th scope="col"><span class="sr-only">Фильтры колонок</span></th>
+          <th scope="col">${colSelect("band", "Итог", BANDS.map((b) => [b.v, b.label, count("band", (r) => bandOf(r) === b.v)]), state.band)}</th>
+          ${columns.map((c) => {
+            const opts = ANSWER_LABELS.map((l) => [l, l, count(`col:${c.id}`, (r) => criterionResult(c, criterionScore(r, c)).label === l)])
+              .filter(([l, , n]) => n || state.cols[c.id] === l);
+            return `<th scope="col">${colSelect(`col:${c.id}`, criterionName(c), opts, state.cols[c.id] || "")}</th>`;
+          }).join("")}
         </tr></thead>
         <tbody role="rowgroup">
+          ${list.length ? "" : `<tr><td colspan="${columns.length + 2}" class="conv-empty-row">Под фильтры колонок не подходит ни один разговор.
+            <button class="btn btn-sm" type="button" data-reset>Сбросить фильтры</button></td></tr>`}
           ${list.map((r) => {
             const crit = r.status === "done" && r.final_critical === "true";
             return `
@@ -389,8 +413,18 @@ export async function render(root) {
       </table>`;
   }
 
+  /** Answer counts for a column, given every other active filter. */
+  function count(key, fn) { return filtered(key).filter(fn).length; }
+
+  function colSelect(key, name, opts, cur) {
+    return `<select class="input col-filter${cur ? " is-set" : ""}" data-col="${esc(key)}" aria-label="Фильтр: ${esc(name)}" title="Фильтр: ${esc(name)}">
+      <option value="">Все</option>
+      ${opts.map(([v, label, n]) => `<option value="${esc(v)}" ${v === cur ? "selected" : ""}>${esc(label)} (${n})</option>`).join("")}
+    </select>`;
+  }
+
   function resetFilters() {
-    Object.assign(state, { lang: "", status: "", q: "" });
+    Object.assign(state, { lang: "", status: "", q: "", band: "", cols: {} });
     $("#f-q", root).value = "";
     draw();
   }
@@ -451,6 +485,15 @@ export async function render(root) {
   $("#f-checklist", root).addEventListener("change", (e) => { state.checklistId = Number(e.target.value); load(); });
   $("#f-lang", root).addEventListener("change", (e) => { state.lang = e.target.value; draw(); });
   $("#f-status", root).addEventListener("change", (e) => { state.status = e.target.value; draw(); });
+  $("#table", root).addEventListener("change", (e) => {
+    const sel = e.target.closest("[data-col]");
+    if (!sel) return;
+    const key = sel.dataset.col;
+    if (key === "band") state.band = sel.value;
+    else state.cols[key.slice(4)] = sel.value;
+    draw();
+    $(`#table [data-col="${CSS.escape(key)}"]`, root)?.focus();
+  });
   $("#f-sort", root).addEventListener("change", (e) => {
     const [key, dir] = e.target.value.split(":");
     state.sort = { key, dir: Number(dir) };
