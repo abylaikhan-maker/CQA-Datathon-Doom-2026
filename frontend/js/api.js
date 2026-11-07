@@ -1,0 +1,68 @@
+// Thin API client. The base URL is configurable so the UI can be hosted
+// separately (e.g. as a Dynamics 365 HTML web resource).
+const base = () => (window.CQA_CONFIG && window.CQA_CONFIG.apiBase) || "";
+
+async function req(method, path, body, raw = false) {
+  const opts = { method, headers: {} };
+  if (body !== undefined) {
+    if (raw) {
+      opts.body = body;
+      opts.headers["content-type"] = "application/json";
+    } else {
+      opts.body = JSON.stringify(body);
+      opts.headers["content-type"] = "application/json";
+    }
+  }
+  const r = await fetch(base() + path, opts);
+  if (r.status === 401 && !base()) {
+    // Google sign-in gate (nginx + oauth2-proxy): remember the screen, then sign in.
+    try { sessionStorage.setItem("cqa.returnTo", location.hash); } catch { /* ignore */ }
+    location.href = "/oauth2/sign_in?rd=" + encodeURIComponent("/");
+    throw new Error("Требуется вход");
+  }
+  const text = await r.text();
+  let data = null;
+  try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+  if (!r.ok) {
+    let msg = data && data.detail ? data.detail : `HTTP ${r.status}`;
+    if (Array.isArray(msg)) msg = msg.map((d) => `${(d.loc || []).join(".")}: ${d.msg}`).join("; ");
+    throw new Error(msg);
+  }
+  return data;
+}
+
+const qs = (o) => {
+  const p = Object.entries(o).filter(([, v]) => v !== undefined && v !== null && v !== "");
+  return p.length ? "?" + new URLSearchParams(p).toString() : "";
+};
+
+export const api = {
+  meta: () => req("GET", "/api/meta"),
+  me: () => req("GET", "/api/me"),
+  groups: () => req("GET", "/api/groups"),
+  importGroup: (group_id, api_url) => req("POST", "/api/datasets/import", { group_id, api_url: api_url || null }),
+  upload: (jsonText, group) => req("POST", "/api/datasets/upload" + qs({ group }), jsonText, true),
+
+  conversations: (params = {}) => req("GET", "/api/conversations" + qs(params)),
+  conversation: (id) => req("GET", `/api/conversations/${encodeURIComponent(id)}`),
+
+  checklists: () => req("GET", "/api/checklists"),
+  checklist: (id) => req("GET", `/api/checklists/${id}`),
+  activeChecklist: () => req("GET", "/api/checklists/active"),
+  saveChecklist: (config, note, activate = true) => req("POST", "/api/checklists", { config, note, activate }),
+  activateChecklist: (id) => req("POST", `/api/checklists/${id}/activate`),
+
+  evaluate: (conversation_id, checklist_id) => req("POST", "/api/evaluations", { conversation_id, checklist_id }),
+  evaluation: (id) => req("GET", `/api/evaluations/${id}`),
+  batch: (body) => req("POST", "/api/batches", body),
+  batchStatus: (id) => req("GET", `/api/batches/${id}`),
+  batches: () => req("GET", "/api/batches"),
+
+  appeals: (status) => req("GET", "/api/appeals" + qs({ status })),
+  appeal: (id) => req("GET", `/api/appeals/${id}`),
+  createAppeal: (body) => req("POST", "/api/appeals", body),
+  decide: (id, body) => req("POST", `/api/appeals/${id}/decision`, body),
+
+  stats: (params = {}) => req("GET", "/api/stats" + qs(params)),
+  exportUrl: (params = {}) => base() + "/api/export.csv" + qs(params),
+};
