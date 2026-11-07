@@ -99,7 +99,7 @@ export function createPlayer(host, { audioUrl, sourceUrl, segments, onSegment, o
             <button type="button" data-mode="dialog" aria-pressed="false">Реплики</button>
           </div>
           ${audioUrl ? `<button class="btn btn-sm btn-ghost cv-pl-rate" type="button" data-pl="rate" aria-label="Скорость воспроизведения">1×</button>
-          <a class="btn btn-sm" href="${esc(sourceUrl || audioUrl)}" target="_blank" rel="noopener">Открыть в плеере ↗</a>` : ""}
+          <a class="btn btn-sm" href="${esc(safeHref(sourceUrl || audioUrl))}" target="_blank" rel="noopener">Открыть в плеере ↗</a>` : ""}
         </div>
       </div>
       <div class="cv-tl">
@@ -319,4 +319,11 @@ export function createPlayer(host, { audioUrl, sourceUrl, segments, onSegment, o
       offs.forEach((f) => f());
     },
   };
+}
+
+// External data: allow only http(s) (and same-origin relative) links.
+function safeHref(u) {
+  const s = String(u || "").trim();
+  if (/^https?:\/\//i.test(s) || /^\/(?!\/)/.test(s)) return s;
+  return "#";
 }

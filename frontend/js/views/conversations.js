@@ -230,20 +230,20 @@ export async function render(root) {
           <th class="col-opt">Канал</th><th>Язык</th>
           ${th("messages", "Реплик", "num col-opt")}
           ${th("score", "Итог", "num")}
-          <th class="col-opt">Грубая ошибка</th><th>Статус</th><th class="col-opt">Апелляции</th>
+          <th class="col-opt">Грубая ошибка</th><th class="col-opt">Статус</th><th class="col-opt">Апелляции</th>
         </tr></thead>
         <tbody>
           ${list.map((r) => {
             const crit = r.status === "done" && r.final_critical === "true";
             return `
-            <tr class="click ${crit ? "is-crit" : ""}" data-id="${esc(r.id)}">
-              <td class="id-cell"><a href="#/conversation/${encodeURIComponent(r.id)}">${esc(r.id)}</a></td>
+            <tr class="click ${crit ? "is-crit" : ""}" data-id="${esc(r.id)}" data-href="${esc(cardHref(r))}">
+              <td class="id-cell"><a href="${cardHref(r)}">${esc(r.id)}</a></td>
               <td class="col-opt"><span class="chan">${chanIcon(r.channel)}${esc(chanLabel(r.channel))}</span></td>
               <td><span class="lang" title="${esc(LANG[r.language] || r.language || "")}">${esc(r.language || "—")}</span></td>
               <td class="num col-opt">${esc(r.messages)}</td>
               <td class="num">${scoreCell(r)}</td>
               <td class="col-opt">${r.status === "done" ? (crit ? `<span class="badge crit">${icon("alert")}Выявлена</span>` : `<span class="muted small">нет</span>`) : ""}</td>
-              <td>${statusBadge(r)}</td>
+              <td class="col-opt">${statusBadge(r)}</td>
               <td class="col-opt">${Number(r.open_appeals) ? `<span class="badge warn">открыта: ${esc(r.open_appeals)}</span>` : Number(r.appeals) ? `<span class="badge brand">рассмотрено: ${esc(r.appeals)}</span>` : ""}</td>
             </tr>`;
           }).join("")}
@@ -275,7 +275,7 @@ export async function render(root) {
     const cta = e.target.closest("[data-cta]");
     if (cta) { (cta.dataset.cta === "import" ? importDialog : uploadDialog)(onImported); return; }
     const tr = e.target.closest("tr[data-id]");
-    if (tr && !e.target.closest("a")) location.hash = `#/conversation/${encodeURIComponent(tr.dataset.id)}`;
+    if (tr && !e.target.closest("a")) location.hash = tr.dataset.href;
   });
   $("#f-group", root).addEventListener("change", (e) => {
     state.group = e.target.value;
@@ -541,4 +541,9 @@ export function uploadDialog(done) {
     dtext.innerHTML = `<b>Перетащите JSON-файл сюда</b> или нажмите, чтобы выбрать`;
     info.innerHTML = `Полный ответ API, объект <code>data</code>, массив записей или одна запись`;
   });
+}
+
+// Open the card on the evaluation the row shows (the list is filtered by checklist version).
+function cardHref(r) {
+  return `#/conversation/${encodeURIComponent(r.id)}${r.eval_id ? `?eval=${r.eval_id}` : ""}`;
 }
