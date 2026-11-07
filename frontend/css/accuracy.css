@@ -1,5 +1,5 @@
 /* «Точность» tab: accuracy against the ground truth and the version history. */
-.acc-delta { font-size: 12px; font-weight: 600; color: var(--ink-3); white-space: nowrap; }
+.acc-delta { font-size: 12px; font-weight: 700; color: var(--ink-3); white-space: nowrap; }
 .acc-delta.up { color: var(--good); }
 .acc-delta.down { color: var(--bad); }
 
@@ -24,7 +24,7 @@
 
 .acc-grid { margin-bottom: 16px; }
 .acc-hbar { grid-template-columns: 150px 1fr 56px; margin-bottom: 2px; }
-.acc-hbar .fill.weak { background: var(--warn); }
+.acc-hbar .fill.weak { background: var(--warn-solid); }
 .acc-err { margin: 0 0 8px 160px; }
 .acc-dl { display: grid; grid-template-columns: 130px 1fr; gap: 6px 12px; margin: 0; }
 .acc-dl dt { color: var(--ink-3); }

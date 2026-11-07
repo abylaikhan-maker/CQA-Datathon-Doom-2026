@@ -191,7 +191,7 @@ function charts(s, rows, done, cfg, cl) {
               ? `<div class="stack" title="${esc(tip)}"><i class="s-scale" style="flex:${rate ?? 0}"></i><i class="s-rest" style="flex:${100 - (rate ?? 0)}"></i></div>`
               : `<div class="stack" title="${esc(tip)}">${yes ? `<i class="s-yes" style="flex:${yes}"></i>` : ""}${no ? `<i class="s-no" style="flex:${no}"></i>` : ""}${d.na ? `<i class="s-na" style="flex:${d.na}"></i>` : ""}${total ? "" : `<i class="s-na" style="flex:1"></i>`}</div>`;
             const share = c.type !== "critical" && scoredW ? (Number(c.weight || 0) / scoredW) * 100 : null;
-            return `<tr ${isCrit && d.yes ? 'style="background:#fff7f5"' : ""}>
+            return `<tr ${isCrit && d.yes ? 'style="background:var(--bad-soft)"' : ""}>
               <td><span class="ct-title"><span><span class="mono muted">${esc(c.code || "")}</span> <b>${esc(c.title)}</b></span>${secTitle[c.section] ? `<small>${esc(secTitle[c.section])}</small>` : ""}</span></td>
               <td class="small muted col-opt">${typeShort(c)}</td>
               <td class="num col-opt" title="${share !== null ? `${fmtNum(share, 1)}% итога` : "без баллов"}">${c.type === "critical" ? "—" : fmtNum(c.weight)}</td>

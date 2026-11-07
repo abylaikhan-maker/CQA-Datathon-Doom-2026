@@ -161,6 +161,24 @@ document.getElementById("skip-link")?.addEventListener("click", (e) => {
   document.getElementById("view").focus();
 });
 
+// Light / dark theme: the <head> script applied it before paint; this keeps it in sync.
+function applyTheme(t, save) {
+  document.documentElement.setAttribute("data-theme", t);
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", t === "dark" ? "#060e0a" : "#07100c");
+  const b = document.getElementById("theme-toggle");
+  if (b) { b.setAttribute("aria-pressed", String(t === "dark")); b.title = t === "dark" ? "Включить светлую тему" : "Включить тёмную тему"; }
+  if (save) { try { localStorage.setItem("cqa.theme", t); } catch { /* ignore */ } }
+}
+applyTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light", false);
+document.getElementById("theme-toggle")?.addEventListener("click", () => {
+  applyTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark", true);
+});
+window.matchMedia?.("(prefers-color-scheme: dark)").addEventListener?.("change", (e) => {
+  let saved = null;
+  try { saved = localStorage.getItem("cqa.theme"); } catch { /* ignore */ }
+  if (!saved) applyTheme(e.matches ? "dark" : "light", false);
+});
+
 window.addEventListener("hashchange", route);
 loadMeta();
 route();
