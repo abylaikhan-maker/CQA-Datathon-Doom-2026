@@ -132,12 +132,15 @@ export function createPlayer(host, { audioUrl, segments, onSegment, onActive }) 
     el.cur.textContent = fmtClock(t);
     if (document.activeElement !== el.seek) el.seek.value = String(Math.min(t, R));
     el.seek.style.setProperty("--p", `${p * 100}%`);
-    // Active (karaoke) message: the last segment that already started.
-    let act = null;
-    if (audio && !st.failed && (playing() || t > 0)) {
-      for (const s of segments) if (s.start <= t + 0.05 && (!act || s.start >= act.start)) act = s;
+    // Active (karaoke) message while playing: the last segment that already started.
+    if (playing()) {
+      let act = null;
+      for (const s of segments) if (s.start <= t + 0.3 && (!act || s.start >= act.start)) act = s;
+      setActive(act ? act.n : null);
     }
-    const n = act ? act.n : null;
+  }
+
+  function setActive(n) {
     if (n !== st.active) {
       st.active = n;
       el.tracks.querySelectorAll(".cv-seg.is-active").forEach((b) => b.classList.remove("is-active"));
@@ -178,8 +181,8 @@ export function createPlayer(host, { audioUrl, segments, onSegment, onActive }) 
 
   function seekTo(sec, { autoplay = false } = {}) {
     if (!audio || st.failed || sec === null || sec === undefined) return;
-    const t = Math.max(0, sec - 0.15);
-    try { audio.currentTime = t; } catch { /* metadata not ready */ }
+    try { audio.currentTime = Math.max(0, sec); } catch { /* metadata not ready */ }
+    if (!autoplay && !playing()) setActive(null);
     if (autoplay) play();
     tick();
   }
@@ -210,7 +213,7 @@ export function createPlayer(host, { audioUrl, segments, onSegment, onActive }) 
     el.zoom.querySelectorAll("[data-mode]").forEach((x) => x.setAttribute("aria-pressed", String(x.dataset.mode === st.mode)));
     layout();
   });
-  on(el.seek, "input", () => { if (audio && !st.failed) { audio.currentTime = Number(el.seek.value); tick(); } });
+  on(el.seek, "input", () => { if (audio && !st.failed) { audio.currentTime = Number(el.seek.value); if (!playing()) setActive(null); tick(); } });
   on(el.tracks, "click", (e) => {
     const seg = e.target.closest("[data-seg]");
     if (seg) {
@@ -223,6 +226,7 @@ export function createPlayer(host, { audioUrl, segments, onSegment, onActive }) 
     const r = el.tracks.getBoundingClientRect();
     const t = ((e.clientX - r.left) / r.width) * range();
     audio.currentTime = Math.max(0, t);
+    if (!playing()) setActive(null);
     tick();
   });
   on(el.tracks, "mousemove", (e) => {
