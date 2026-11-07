@@ -81,6 +81,8 @@ function rowHtml(a) {
           ${changed ? `<span class="ap-was is-struck">${esc(rawAnswer(a.original_answer))}</span>→<b>${esc(rawAnswer(a.new_answer))}</b>` : `<b>${esc(rawAnswer(a.original_answer))}</b>`}</div>
         <div class="ap-ba-line"><span class="ap-ba-k">Итог</span>
           ${resolved ? `<span class="ap-was">${fmtNum(a.total_before)}</span>→<b>${fmtNum(a.total_after)}</b>${deltaHtml(a.total_before, a.total_after)}` : `<b>${fmtNum(a.total_before)}</b>`}</div>
+        ${a.criterion_type === "critical" && changed ? `<div class="ap-ba-line"><span class="ap-ba-k">Флаг</span>
+          <b>${a.new_answer === "yes" ? "грубая ошибка выставлена" : "грубая ошибка снята"}</b></div>` : ""}
       </div>
       <div class="ap-date">${esc(fmtDate(resolved ? a.resolved_at : a.created_at))}</div>
     </a>`;

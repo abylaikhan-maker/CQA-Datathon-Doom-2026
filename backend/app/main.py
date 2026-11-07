@@ -6,12 +6,12 @@ import io
 import json
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StringConstraints
 
 from . import accuracy, audio, config, dataset, db, evaluator, scoring, version
 
@@ -357,18 +357,30 @@ async def get_batch(bid: int):
 
 
 # ----------------------------------------------------------------- appeals ----
+# Free text that must carry something besides whitespace (surrounding spaces are stripped).
+NonBlank = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+
+
 class AppealIn(BaseModel):
     evaluation_id: int
     criterion_id: str
-    comment: str = Field(min_length=1)
+    comment: NonBlank
     author: str | None = None
 
 
 class DecisionIn(BaseModel):
     decision: str  # confirm | change
     new_answer: Any = None
-    reason: str = Field(min_length=1)
+    reason: NonBlank
     reviewer: str | None = None
+
+
+def _same_answer(a: Any, b: Any) -> bool:
+    """20 == 20.0 == "20" for scale steps; plain equality for yes / no / na."""
+    try:
+        return float(a) == float(b)
+    except (TypeError, ValueError):
+        return a == b
 
 
 @app.post("/api/appeals")
@@ -403,7 +415,8 @@ async def list_appeals(status: str | None = None):
     out = []
     for r in db.recs(rows):
         crit = next((c for c in r.pop("criteria") or [] if c["id"] == r["criterion_id"]), {})
-        out.append({**r, "criterion_title": crit.get("title"), "criterion_code": crit.get("code")})
+        out.append({**r, "criterion_title": crit.get("title"), "criterion_code": crit.get("code"),
+                    "criterion_type": crit.get("type")})
     return out
 
 
@@ -441,14 +454,21 @@ async def decide_appeal(aid: int, body: DecisionIn, request: Request):
             row = next(r for r in final if r["criterion_id"] == a["criterion_id"])
             new_answer = row["answer"]
             if body.decision == "change":
+                if body.new_answer is None or str(body.new_answer).strip() == "":
+                    raise HTTPException(400, "Для решения «Изменить» укажите новый ответ")
                 new_answer, warn = scoring.normalize_answer(crit_cfg, body.new_answer)
                 if warn:
                     raise HTTPException(400, f"Некорректный новый ответ: {warn}")
-                row["review"] = {"from": row["answer"], "to": new_answer, "reason": body.reason,
-                                 "appeal_id": aid, "reviewer": reviewer}
+                if _same_answer(new_answer, row["answer"]):
+                    raise HTTPException(400, "Новый ответ совпадает с текущим — выберите «Подтвердить»")
+                review = {"from": row["answer"], "to": new_answer, "reason": body.reason,
+                          "appeal_id": aid, "reviewer": reviewer}
                 row["answer"] = new_answer
             else:
-                row["review"] = {"confirmed": True, "reason": body.reason, "appeal_id": aid, "reviewer": reviewer}
+                review = {"confirmed": True, "reason": body.reason, "appeal_id": aid, "reviewer": reviewer}
+            # `review` is the latest decision; `reviews` keeps every decision on this criterion.
+            row["review"] = review
+            row["reviews"] = [*(row.get("reviews") or []), review]
             score = evaluator.recompute_final(cfg, final)
             await conn.execute("UPDATE evaluations SET final_criteria=$2, final_score=$3, final_total=$4 WHERE id=$1",
                                e["id"], final, score, score["total"])

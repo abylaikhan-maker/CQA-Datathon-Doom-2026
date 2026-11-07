@@ -6,7 +6,7 @@ import { esc, $, $$, fmtNum, fmtDate, toast, busy, modal, answerView, tsSeconds,
 import { refreshBadge } from "../app.js";
 import { createPlayer, buildSegments, audioTimeline } from "../card/player.js";
 import { msgHtml, scrollInBox } from "../card/transcript.js";
-import { ringHtml, critHtml, lossesHtml, metaHtml, loadingHtml, updateLoading, firstRef, plural } from "../card/score.js";
+import { ringHtml, critHtml, lossesHtml, metaHtml, loadingHtml, updateLoading, firstRef, plural, isRevised } from "../card/score.js";
 
 let ctx = null;
 
@@ -388,7 +388,7 @@ function drawEvaluation(ev) {
     </div>
     ${critical}
     <div id="cv-why">${lossesHtml({ ev, critCfg, scoreRows, appealsBy, expanded: ctx.whyExpanded })}</div>
-    ${ev.summary ? `<div class="cv-summary"><span class="cv-summary-h">Резюме модели</span>${esc(ev.summary)}</div>` : ""}
+    ${ev.summary ? `<div class="cv-summary"><span class="cv-summary-h">Резюме модели${ev.final_criteria.some((r) => isRevised(r, origRows[r.criterion_id])) ? " · до пересмотра" : ""}</span>${esc(ev.summary)}</div>` : ""}
     <div class="cv-crits" id="crit-list">
       <div class="cv-crits-h"><h3>Критерии</h3><span class="cv-muted-s">нажмите, чтобы увидеть объяснение и реплики</span></div>
       ${groups.map((g) => {
