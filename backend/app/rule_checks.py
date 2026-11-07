@@ -116,7 +116,8 @@ async def list_rule_suggestions(kid: int):
         cases = await _suggestion_cases(conn, kid, criteria)
     return {
         "minimum_cases": MIN_SUGGESTION_CASES,
-        "items": [{"criterion_id": c["id"], "case_count": len(cases[c["id"]])} for c in criteria if c["id"] in cases],
+        "items": [{"criterion_id": c["id"], "case_count": len(cases[c["id"]]), "cases": cases[c["id"]]}
+                  for c in criteria if c["id"] in cases],
     }
 
 

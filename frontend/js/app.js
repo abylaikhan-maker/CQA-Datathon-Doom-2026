@@ -12,6 +12,7 @@ import * as analytics from "./views/analytics.js";
 import * as accuracy from "./views/accuracy.js";
 import * as regulations from "./views/regulations.js";
 import * as verify from "./views/verify.js";
+import * as rules from "./views/rules.js";
 
 const routes = [
   { re: /^\/conversations$/, view: conversations, nav: "conversations", title: "Разговоры", skel: "list" },
@@ -23,6 +24,7 @@ const routes = [
   { re: /^\/appeals\/(\d+)$/, view: appeals, nav: "appeals", keys: ["id"], title: "Апелляции", skel: "split" },
   { re: /^\/accuracy$/, view: accuracy, nav: "accuracy", title: "Точность", skel: "list" },
   { re: /^\/analytics$/, view: analytics, nav: "analytics", title: "Аналитика", skel: "list" },
+  { re: /^\/rules$/, view: rules, nav: "rules", title: "Правила из апелляций", skel: "list" },
   { re: /^\/regulations$/, view: regulations, nav: "regulations", title: "Регламенты", skel: "list" },
   { re: /^\/verify$/, view: verify, nav: "accuracy", title: "Проверка эталона", skel: "split" },
   { re: /^\/verify\/(.+)$/, view: verify, nav: "accuracy", keys: ["id"], title: "Проверка эталона", skel: "split" },

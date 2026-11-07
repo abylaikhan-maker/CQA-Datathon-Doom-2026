@@ -158,6 +158,7 @@ export async function render(root, params, query = {}) {
   const editor = $("#editor", page);
   const suggestionAppeals = new Set();
   drawEditor(editor);
+  applyRuleDraft(current, editor, suggestionAppeals);
   $("#focus-feedback-rule", page)?.addEventListener("click", () => focusGuidance(editor, target));
   const suggestionSection = $("#rule-suggestions", page);
   if (suggestionSection) loadRuleSuggestions(suggestionSection, current, editor, suggestionAppeals);
@@ -175,6 +176,22 @@ export async function render(root, params, query = {}) {
   window.addEventListener("beforeunload", onUnload);
   offUnload = () => window.removeEventListener("beforeunload", onUnload);
   return offUnload;
+}
+
+/** «Открыть в редакторе» on #/rules: the proposed guidance addition arrives as an unsaved draft change. */
+function applyRuleDraft(current, editor, suggestionAppeals) {
+  let d = null;
+  try {
+    d = JSON.parse(sessionStorage.getItem("cqa.ruleDraft") || "null");
+    sessionStorage.removeItem("cqa.ruleDraft");
+  } catch { /* ignore */ }
+  if (!d || d.checklistId !== current.id || !d.addition) return;
+  const criterion = draft.criteria.find((c) => c.id === d.criterionId);
+  if (!criterion) { toast("В этой версии нет критерия из предложения", true); return; }
+  criterion.guidance = [criterion.guidance?.trim(), d.addition].filter(Boolean).join("\n\n");
+  (d.appeals || []).forEach((aid) => suggestionAppeals.add(aid));
+  focusGuidance(editor, criterion);
+  toast("Предложение добавлено в инструкцию критерия — проверьте текст и сохраните новую версию");
 }
 
 function focusGuidance(editor, criterion) {
@@ -201,7 +218,8 @@ async function loadRuleSuggestions(section, current, editor, suggestionAppeals) 
   const items = current.config.criteria.filter((c) => counts.has(c.id));
   section.innerHTML = `
     <h3>Предложения по правилам</h3>
-    <p class="muted small">После ${result.minimum_cases} пересмотренных оценок по разным диалогам Gemini может предложить уточнение к критерию.</p>
+    <p class="muted small">После ${result.minimum_cases} пересмотренных оценок по разным диалогам Gemini может предложить уточнение к критерию.
+      Все кейсы и предложения по версиям — в разделе <a href="#/rules?v=${current.id}">«Правила из апелляций»</a>.</p>
     ${items.length ? `<ul class="rule-suggestion-list">${items.map((c) => {
       const count = counts.get(c.id);
       const ready = count >= result.minimum_cases;
