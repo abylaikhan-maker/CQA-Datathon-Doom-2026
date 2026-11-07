@@ -17,14 +17,12 @@ const state = {
   sort: { key: "id", dir: 1 },
 };
 let activePoll = null;
-const seen = (k) => store.get(`cqa.seen.${k}`) === "1";
 
 const LANG_ORDER = ["RU", "KZ", "EN"];
 const STATUS = [
   { v: "", label: "Все" },
   { v: "none", label: "Не оценены", test: (r) => !r.eval_id },
   { v: "done", label: "Оценены", test: (r) => r.status === "done" },
-  { v: "critical", label: "Грубые ошибки", test: (r) => r.status === "done" && r.final_critical === "true", cls: "crit-chip" },
   { v: "appeal", label: "С апелляцией", test: (r) => Number(r.appeals) > 0 },
   { v: "error", label: "Ошибки оценки", test: (r) => r.status === "error" },
 ];
@@ -46,13 +44,21 @@ const SORT_OPTIONS = [
   ["messages:1", "Число реплик ↑"], ["messages:-1", "Число реплик ↓"],
 ];
 
-export async function render(root) {
+const QUERY_KEYS = ["status", "lang", "crit", "band", "col", "group", "q"];
+
+export async function render(root, params = {}, query = {}) {
   clearInterval(activePoll);
   const [groups, checklists, meta] = await Promise.all([api.groups(), api.checklists(), api.meta().catch(() => null)]);
   const openImport = () => importDialog(onImported, meta?.dataset_api_configured);
+  if (QUERY_KEYS.some((k) => query[k] !== undefined)) {
+    Object.assign(state, { lang: query.lang || "", status: query.status || "", crit: query.crit || "", band: query.band || "", q: query.q || "", cols: {} });
+    if (query.col) { const i = query.col.indexOf(":"); if (i > 0) state.cols[query.col.slice(0, i)] = query.col.slice(i + 1); }
+    if (query.group !== undefined) { state.group = query.group; store.set("cqa.group", state.group); }
+  }
   if (state.group && !groups.some((g) => g.id === state.group)) state.group = "";
   if (!checklists.some((c) => c.id === state.checklistId)) {
-    state.checklistId = (checklists.find((c) => c.is_active) || checklists[0])?.id ?? null;
+    const saved = Number(store.get("cqa.checklist"));
+    state.checklistId = (checklists.find((c) => c.id === saved) || checklists.find((c) => c.is_active) || checklists[0])?.id ?? null;
   }
   const clName = (id) => {
     const c = checklists.find((x) => x.id === id);
@@ -64,18 +70,15 @@ export async function render(root) {
     <header class="page-head">
       <div>
         <h1>Диалоги</h1>
-        <div class="sub">Обращения в службу поддержки (расшифровки): загрузите набор, выберите версию чек-листа и запустите оценку. Строка открывает разбор с объяснениями.</div>
+        <div class="sub">Все диалоги набора с ответами по каждому критерию. Фильтруйте сверху или прямо в шапке таблицы; строка открывает разбор с объяснениями. Сводка — на странице «Обзор».</div>
       </div>
       <div class="spacer"></div>
       <div class="page-actions">
-        <button class="btn btn-ghost" type="button" id="btn-guide" hidden>${icon("info")}С чего начать</button>
         <button class="btn" type="button" id="btn-upload">${icon("upload")}Загрузить файл</button>
         <button class="btn ${hasAny ? "" : "btn-primary"}" type="button" id="btn-import">${icon("cloud")}Импорт из API</button>
       </div>
     </header>
-    <div id="guide"></div>
     <div id="batch"></div>
-    <div class="kpis" id="kpis"></div>
     <section class="card conv-card" aria-label="Список диалогов">
       <div class="card-head">
         <h2>Журнал диалогов</h2>
@@ -166,8 +169,6 @@ export async function render(root) {
   function draw() {
     const list = sorted(filtered());
     $("#f-sort", root).value = `${state.sort.key}:${state.sort.dir}`;
-    drawGuide();
-    drawKpis(list);
     drawFilters();
     drawTable(list);
     const nNew = (filtersActive() ? filtered() : rows).filter(isNew).length;
@@ -181,155 +182,6 @@ export async function render(root) {
       <span>Чек-лист: ${esc(clName(state.checklistId))}</span>
       ${filtersActive() ? `<button class="btn-link" type="button" data-reset>Сбросить фильтры</button>` : ""}` : "";
     foot.hidden = !rows.length;
-  }
-
-  // ---- «С чего начать»: the demo path with live state, until most dialogs are evaluated.
-  let sampleCrit = { id: null, crit: undefined }; // first criterion that lost points in the example dialog
-  function guideSteps() {
-    const total = groups.reduce((s, g) => s + Number(g.count || 0), 0) || rows.length;
-    const done = rows.filter((r) => r.status === "done");
-    // Example dialog: the lowest evaluated score has the most deductions to explain.
-    const sample = [...done].sort((a, b) => Number(a.final_total) - Number(b.final_total) || a.id.localeCompare(b.id))
-      .find((r) => Number(r.final_total) > 0) || done[0];
-    const appeals = rows.reduce((s, r) => s + Number(r.appeals || 0), 0);
-    const decided = rows.reduce((s, r) => s + Math.max(0, Number(r.appeals || 0) - Number(r.open_appeals || 0)), 0);
-    const open = rows.reduce((s, r) => s + Number(r.open_appeals || 0), 0);
-    const nNew = rows.filter(isNew).length;
-    const card = sample ? cardHref(sample) : null;
-    if (sample && sampleCrit.id !== sample.eval_id) loadSampleCrit(sample);
-    const critHref = card && sampleCrit.id === sample?.eval_id && sampleCrit.crit
-      ? `${card}${card.includes("?") ? "&" : "?"}crit=${encodeURIComponent(sampleCrit.crit)}` : card;
-    const steps = [
-      { ok: total > 0, t: "Загрузите диалоги", d: "Из API организаторов или файлом JSON", act: { btn: "import", label: "Импорт из API" } },
-      { ok: done.length > 0, t: "Запустите оценку", d: "Модель проверит каждый диалог по чек-листу", act: { btn: "eval", label: nNew ? `Оценить новые (${nNew})` : "Оценить новые" }, need: total > 0 },
-      { ok: seen("card"), t: "Откройте разбор", d: "Баллы, объяснения и реплики-доказательства", act: { href: card, label: "Открыть разбор" } },
-      { ok: appeals > 0, t: "Оспорьте оценку", d: "«Оспорить оценку» у критерия в разборе", act: { href: critHref, label: "К критериям" } },
-      { ok: decided > 0, t: "Примите решение", d: "Проверяющий подтверждает или меняет ответ", act: { href: "#/appeals", label: open ? `Открытых: ${open}` : "К апелляциям" } },
-      { ok: seen("accuracy"), t: "Сверьте с эталоном", d: "Насколько ответы модели совпадают с разметкой", act: { href: "#/accuracy", label: "Точность" } },
-    ];
-    // An appeal or a decision is only possible from the dialog review, so it counts as opened.
-    if (steps[3].ok || steps[4].ok) steps[2].ok = true;
-    return steps;
-  }
-
-  async function loadSampleCrit(sample) {
-    sampleCrit = { id: sample.eval_id, crit: undefined };
-    try {
-      const ev = await api.evaluation(sample.eval_id);
-      const list = ev.final_score?.criteria || ev.score?.criteria || [];
-      const lost = list.find((c) => c.points !== null && c.max_points !== null && Number(c.points) < Number(c.max_points));
-      if (sampleCrit.id !== sample.eval_id) return;
-      sampleCrit.crit = lost ? lost.criterion_id : null;
-      if (root.isConnected && $(".guide", root)) drawGuide();
-    } catch { /* keep the plain link */ }
-  }
-
-  const phone = () => window.matchMedia("(max-width: 760px)").matches;
-
-  function drawGuide() {
-    const box = $("#guide", root), reopen = $("#btn-guide", root);
-    const steps = guideSteps();
-    const nDone = steps.filter((s) => s.ok).length;
-    const evaluated = rows.filter((r) => r.status === "done").length;
-    const little = !rows.length || evaluated < rows.length * 0.5;
-    const relevant = little || nDone < steps.length;
-    const hidden = store.get("cqa.guide.hidden") === "1";
-    reopen.hidden = !(hidden && relevant);
-    if (hidden || !relevant) { box.innerHTML = ""; return; }
-    const next = steps.findIndex((s) => !s.ok);
-    // Collapsed to one line on phones, and once the core path (up to the decision) is done.
-    const coreDone = evaluated > 0 && steps.slice(0, 5).every((s) => s.ok);
-    let pref = null;
-    try { pref = sessionStorage.getItem("cqa.guide.open"); } catch { /* ignore */ }
-    const expanded = pref === "1" ? true : pref === "0" ? false : !(phone() || coreDone);
-    const actionOf = (s, i, state) => {
-      if (s.ok) return "";
-      const cls = `btn btn-sm ${state === "next" ? "guide-cta" : "guide-btn"}`;
-      const a = s.act;
-      if (a.href === null || s.need === false) return `<button class="${cls}" type="button" disabled title="Сначала выполните предыдущие шаги">${esc(a.label)}</button>`;
-      return a.btn ? `<button class="${cls}" type="button" data-guide="${a.btn}">${esc(a.label)}</button>`
-        : `<a class="${cls}" href="${esc(a.href)}">${esc(a.label)}</a>`;
-    };
-    const closeBtn = `<button class="btn btn-sm guide-x" type="button" data-guide-hide aria-label="Скрыть подсказку «С чего начать»" title="Скрыть">${icon("x")}</button>`;
-    if (!expanded) {
-      const s = steps[next];
-      box.innerHTML = `
-        <section class="guide is-collapsed" aria-label="С чего начать">
-          <button class="guide-bar" type="button" data-guide-toggle aria-expanded="false" aria-controls="guide">
-            <span class="guide-mark" aria-hidden="true">${s ? next + 1 : icon("check")}</span>
-            <span class="guide-bar-t">${s ? `<span class="guide-prog">Шаг ${next + 1} из ${steps.length}:</span> <b>${esc(s.t)}</b>` : "<b>Все шаги пройдены</b>"}</span>
-            <span class="guide-bar-more">Все шаги${icon("down")}</span>
-          </button>
-          ${s ? `<span class="guide-bar-act">${actionOf(s, next, "next")}</span>` : ""}
-          ${closeBtn}
-        </section>`;
-      return;
-    }
-    box.innerHTML = `
-      <section class="guide" aria-labelledby="guide-h">
-        <div class="guide-head">
-          <h2 id="guide-h">С чего начать</h2>
-          <span class="guide-prog">${nDone === steps.length ? "Все шаги пройдены" : `Пройдено ${nDone} из ${steps.length}`}</span>
-          <button class="btn btn-sm guide-btn guide-fold" type="button" data-guide-toggle aria-expanded="true" aria-controls="guide">Свернуть${icon("up")}</button>
-          ${closeBtn}
-        </div>
-        <ol class="guide-steps">
-          ${steps.map((s, i) => {
-            const state = s.ok ? "done" : i === next ? "next" : "todo";
-            const action = actionOf(s, i, state);
-            return `
-            <li class="guide-step is-${state}" ${state === "next" ? 'aria-current="step"' : ""}>
-              <span class="guide-mark" aria-hidden="true">${s.ok ? icon("check") : i + 1}</span>
-              <span class="sr-only">${s.ok ? "Выполнено:" : state === "next" ? "Следующий шаг:" : ""}</span>
-              <b class="guide-t">${esc(s.t)}</b>
-              <span class="guide-d">${esc(s.d)}</span>
-              ${action ? `<span class="guide-act">${action}</span>` : ""}
-            </li>`;
-          }).join("")}
-        </ol>
-      </section>`;
-    // On phones the steps scroll sideways: bring the next one into view without moving the page.
-    const ol = $(".guide-steps", box), cur = $(".is-next", box);
-    if (ol && cur && ol.scrollWidth > ol.clientWidth) ol.scrollLeft = Math.max(0, cur.offsetLeft - ol.offsetLeft - 16);
-  }
-
-  function drawKpis(list) {
-    const k = $("#kpis", root);
-    if (!rows.length) { k.innerHTML = ""; k.hidden = true; return; }
-    k.hidden = false;
-    const done = list.filter((r) => r.status === "done");
-    const avg = done.length ? done.reduce((s, r) => s + Number(r.final_total || 0), 0) / done.length : null;
-    const crit = done.filter((r) => r.final_critical === "true").length;
-    const open = list.reduce((s, r) => s + Number(r.open_appeals || 0), 0);
-    const allAppeals = list.reduce((s, r) => s + Number(r.appeals || 0), 0);
-    const evalPct = pct(done.length, list.length);
-    const sc = scoreClass(avg);
-    k.innerHTML = `
-      <div class="card kpi">
-        <div class="lbl">${icon("list")}Диалогов</div>
-        <div class="v">${list.length}${list.length !== rows.length ? `<small> из ${rows.length}</small>` : ""}</div>
-        <div class="foot">${list.length !== rows.length ? "с учётом фильтров" : "в выбранном наборе"}</div>
-      </div>
-      <div class="card kpi">
-        <div class="lbl">${icon("done")}Оценено</div>
-        <div class="v">${done.length}<small> / ${list.length}</small></div>
-        <div class="meter" title="${fmtNum(evalPct, 0)}% диалогов оценено"><i style="width:${evalPct ?? 0}%"></i></div>
-      </div>
-      <div class="card kpi ${sc === "hi" ? "is-good" : sc === "mid" ? "is-warn" : sc === "lo" ? "is-bad" : ""}">
-        <div class="lbl">${icon("score")}Средний итог</div>
-        <div class="v">${fmtNum(avg)}<small> / 100</small></div>
-        <div class="foot">${done.length ? `по ${done.length} ${plural(done.length, ["оценке", "оценкам", "оценкам"])}` : "нет оценок"}</div>
-      </div>
-      <button type="button" class="card kpi kpi-btn ${crit ? "is-bad" : ""}" data-kpi-status="critical" title="Показать диалоги с грубой ошибкой">
-        <span class="lbl">${icon("alert")}Грубые ошибки</span>
-        <span class="v">${crit}</span>
-        <span class="foot">${crit ? `Открыть диалоги ${icon("chev")}` : done.length ? "Нарушений не найдено" : "Оцените диалоги"}</span>
-      </button>
-      <a class="card kpi ${open ? "is-warn" : ""}" href="#/appeals" title="Перейти к апелляциям">
-        <span class="lbl">${icon("scale")}Открытые апелляции</span>
-        <span class="v">${open}</span>
-        <span class="foot">${open ? `Открыть апелляции ${icon("chev")}` : `всего апелляций: ${allAppeals}`}</span>
-      </a>`;
   }
 
   function drawFilters() {
@@ -458,34 +310,6 @@ export async function render(root) {
       return;
     }
     if (e.target.closest("[data-reset]")) { resetFilters(); return; }
-    const kpi = e.target.closest("[data-kpi-status]");
-    if (kpi) { state.status = state.status === kpi.dataset.kpiStatus ? "" : kpi.dataset.kpiStatus; draw(); return; }
-    const g = e.target.closest("[data-guide]");
-    if (g) {
-      if (g.dataset.guide === "import") importDialog(onImported);
-      else if (g.dataset.guide === "eval") startBatch(true, g);
-      return;
-    }
-    if (e.target.closest("[data-guide-hide]")) {
-      store.set("cqa.guide.hidden", "1"); drawGuide();
-      $("#btn-guide", root).focus();
-      return;
-    }
-    const tg = e.target.closest("[data-guide-toggle]");
-    if (tg) {
-      const open = tg.getAttribute("aria-expanded") !== "true";
-      try { sessionStorage.setItem("cqa.guide.open", open ? "1" : "0"); } catch { /* ignore */ }
-      drawGuide();
-      $("#guide [data-guide-toggle]", root)?.focus();
-      return;
-    }
-    if (e.target.closest("#btn-guide")) {
-      store.del("cqa.guide.hidden");
-      try { sessionStorage.setItem("cqa.guide.open", "1"); } catch { /* ignore */ }
-      drawGuide();
-      $(".guide h2", root)?.scrollIntoView({ block: "nearest" });
-      return;
-    }
     const cta = e.target.closest("[data-cta]");
     if (cta) {
       if (cta.dataset.cta === "import") openImport();
@@ -500,7 +324,11 @@ export async function render(root) {
     store.set("cqa.group", state.group);
     load();
   });
-  $("#f-checklist", root).addEventListener("change", (e) => { state.checklistId = Number(e.target.value); load(); });
+  $("#f-checklist", root).addEventListener("change", (e) => {
+    state.checklistId = Number(e.target.value);
+    store.set("cqa.checklist", String(state.checklistId));
+    load();
+  });
   $("#f-lang", root).addEventListener("change", (e) => { state.lang = e.target.value; draw(); });
   $("#f-status", root).addEventListener("change", (e) => { state.status = e.target.value; draw(); });
   $("#table", root).addEventListener("change", (e) => {
@@ -618,6 +446,13 @@ export async function render(root) {
   await load();
   const running = store.get("cqa.batch");
   if (running) trackBatch(Number(running));
+  // Actions requested by a link from «Обзор»; the hash is cleaned so a reload doesn't repeat them.
+  if (query.do === "import" || query.do === "eval") {
+    const clean = new URLSearchParams(Object.entries(query).filter(([k]) => k !== "do"));
+    history.replaceState(null, "", `#/conversations${clean.size ? `?${clean}` : ""}`);
+    if (query.do === "import") openImport();
+    else if (rows.some(isNew)) startBatch(true, $("#btn-batch", root));
+  }
   return () => clearInterval(activePoll);
 }
 

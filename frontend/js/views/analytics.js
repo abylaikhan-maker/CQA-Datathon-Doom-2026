@@ -1,109 +1,14 @@
 import { api } from "../api.js";
-import { esc, $, fmtNum, scoreClass, LANG, plural, icon, pct } from "../util.js";
+import { esc, fmtNum, LANG, plural, icon } from "../util.js";
 
-const st = { group: "", checklist_id: "" };
 const LANG_ORDER = ["RU", "KZ", "EN"];
+// Chart helpers for «Обзор» (views/overview.js). Links open «Диалоги» with the matching filter.
+const dlgLink = (q) => `#/conversations?${new URLSearchParams(q)}`;
 
-export async function render(root) {
-  const [groups, checklists, meta] = await Promise.all([api.groups(), api.checklists(), api.meta().catch(() => null)]);
-  if (st.group && !groups.some((g) => g.id === st.group)) st.group = "";
-  if (!checklists.some((c) => String(c.id) === st.checklist_id)) {
-    st.checklist_id = String((checklists.find((c) => c.is_active) || checklists[0])?.id || "");
-  }
-  const params = { group: st.group || null, checklist_id: st.checklist_id || null };
-  const cl = checklists.find((c) => String(c.id) === st.checklist_id);
-  const [s, rows, full] = await Promise.all([
-    api.stats(params),
-    api.conversations(params),
-    cl ? api.checklist(cl.id) : Promise.resolve(null),
-  ]);
-  const cfg = full?.config || { criteria: [], sections: [] };
-  const done = rows.filter((r) => r.status === "done" && r.final_total !== null);
-
-  root.innerHTML = `<div class="an-page">
-    <div class="page-head">
-      <div><h1>Аналитика</h1>
-        <div class="sub">Последняя оценка каждого диалога выбранной версией чек-листа, с учётом решений по апелляциям.</div></div>
-      <div class="spacer"></div>
-      <div class="an-filters">
-        <label class="field">Набор
-          <select class="input" id="a-group">
-            <option value="">Все наборы</option>
-            ${groups.map((g) => `<option value="${esc(g.id)}" ${g.id === st.group ? "selected" : ""}>${esc(g.id)} (${g.count})</option>`).join("")}
-          </select></label>
-        <label class="field">Чек-лист
-          <select class="input" id="a-cl">
-            ${checklists.map((c) => `<option value="${c.id}" ${String(c.id) === st.checklist_id ? "selected" : ""}>${esc(c.name)} · v${c.version}${c.is_active ? " (активный)" : ""}</option>`).join("")}
-          </select></label>
-        <a class="btn" href="${esc(api.exportUrl(params))}" download>${icon("download")}Экспорт CSV</a>
-      </div>
-    </div>
-    ${kpis(s, rows, done, meta)}
-    ${s.evaluated ? charts(s, rows, done, cfg, cl) : `
-      <div class="card empty-state">
-        <div class="ic">${icon("score")}</div>
-        <h3>Пока нет оценок${cl ? ` по «${esc(cl.name)} v${esc(cl.version)}»` : ""}</h3>
-        <p>Аналитика строится по оценённым диалогам. Запустите оценку на странице «Диалоги» — здесь появятся средний итог, разбивка по языкам и каналам и результаты по каждому критерию.</p>
-        <a class="btn btn-primary" href="#/conversations">${icon("play")}Перейти к оценке</a>
-      </div>`}
-  </div>`;
-
-  $("#a-group", root).addEventListener("change", (e) => { st.group = e.target.value; rerender(root); });
-  $("#a-cl", root).addEventListener("change", (e) => { st.checklist_id = e.target.value; rerender(root); });
-}
-
-async function rerender(root) {
-  const page = root.firstElementChild;
-  if (page) page.style.opacity = ".55";
-  root.setAttribute("aria-busy", "true");
-  try { await render(root); } finally { root.removeAttribute("aria-busy"); }
-}
-
-function median(xs) {
+export function median(xs) {
   if (!xs.length) return null;
   const a = [...xs].sort((x, y) => x - y), m = Math.floor(a.length / 2);
   return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2;
-}
-
-function kpis(s, rows, done, meta) {
-  const sc = scoreClass(s.avg_total);
-  const evalPct = pct(s.evaluated, rows.length);
-  const med = median(done.map((r) => Number(r.final_total)));
-  const totalCost = s.avg_cost_usd !== null && s.avg_cost_usd !== undefined ? s.avg_cost_usd * s.evaluated : null;
-  const ap = s.appeals || { open: 0, changed: 0, confirmed: 0 };
-  return `
-    <div class="kpis">
-      <div class="card kpi">
-        <div class="lbl">${icon("done")}Оценено диалогов</div>
-        <div class="v">${s.evaluated}${rows.length ? `<small> / ${rows.length}</small>` : ""}</div>
-        <div class="meter" title="${fmtNum(evalPct, 0)}% набора оценено"><i style="width:${Math.min(100, evalPct ?? 0)}%"></i></div>
-      </div>
-      <div class="card kpi ${sc === "hi" ? "is-good" : sc === "mid" ? "is-warn" : sc === "lo" ? "is-bad" : ""}">
-        <div class="lbl">${icon("score")}Средний итог</div>
-        <div class="v">${fmtNum(s.avg_total)}<small> / 100</small></div>
-        <div class="foot">${med !== null ? `медиана ${fmtNum(med)}` : "—"}</div>
-      </div>
-      <div class="card kpi ${s.critical ? "is-bad" : ""}">
-        <div class="lbl">${icon("alert")}Грубые ошибки</div>
-        <div class="v">${s.critical}</div>
-        <div class="foot">${s.evaluated ? `${fmtNum(pct(s.critical, s.evaluated), 0)}% оценённых диалогов` : "—"}</div>
-      </div>
-      <a class="card kpi ${ap.open ? "is-warn" : ""}" href="#/appeals" title="Перейти к апелляциям">
-        <span class="lbl">${icon("scale")}Апелляции открыты</span>
-        <span class="v">${ap.open}</span>
-        <span class="foot meta-list" title="По всем наборам и версиям"><span>изменено ${ap.changed}</span><span>подтверждено ${ap.confirmed}</span></span>
-      </a>
-      <div class="card kpi">
-        <div class="lbl">${icon("coin")}Стоимость оценки</div>
-        <div class="v">${s.avg_cost_usd !== null && s.avg_cost_usd !== undefined ? `$${fmtNum(s.avg_cost_usd, 4)}` : "—"}</div>
-        <div class="foot">${totalCost !== null ? `≈ $${fmtNum(totalCost, 3)} за ${s.evaluated} ${plural(s.evaluated, ["диалог", "диалога", "диалогов"])}` : "нет данных"}</div>
-      </div>
-      <div class="card kpi">
-        <div class="lbl">${icon("clock")}Время оценки</div>
-        <div class="v">${s.avg_duration_ms ? fmtNum(s.avg_duration_ms / 1000, 1) : "—"}<small> с</small></div>
-        <div class="foot">${meta?.model ? `модель ${esc(meta.model)}` : "в среднем на диалог"}</div>
-      </div>
-    </div>`;
 }
 
 function hbars(entries, labelOf) {
@@ -112,16 +17,16 @@ function hbars(entries, labelOf) {
     ${entries.map(([k, v]) => {
       const { label, sub } = labelOf(k);
       return `
-      <div class="hbar" title="${esc(`${sub || label}: ${v.n} ${plural(v.n, ["диалог", "диалога", "диалогов"])}, средний итог ${fmtNum(v.avg)}`)}">
+      <a class="hbar" href="${dlgLink({ lang: k })}" title="${esc(`${sub || label}: ${v.n} ${plural(v.n, ["диалог", "диалога", "диалогов"])}, средний итог ${fmtNum(v.avg)} — открыть диалоги`)}">
         <span class="lbl"><b class="l1">${esc(label)}${sub ? ` <span>${esc(sub)}</span>` : ""}</b><small>${v.n} ${plural(v.n, ["диалог", "диалога", "диалогов"])}</small></span>
         <div class="track"><div class="fill" style="width:${Math.max(0, Math.min(100, Number(v.avg) || 0))}%"></div></div>
         <span class="num">${fmtNum(v.avg)}</span>
-      </div>`;
+      </a>`;
     }).join("")}
     <div class="hbar-axis" aria-hidden="true"><span></span><div><span>0</span><span>50</span><span>100</span></div><span></span></div>`;
 }
 
-function charts(s, rows, done, cfg, cl) {
+export function charts(s, rows, done, cfg, cl) {
   const byLang = Object.entries(s.by_language || {})
     .sort(([a], [b]) => (LANG_ORDER.indexOf(a) + 1 || 99) - (LANG_ORDER.indexOf(b) + 1 || 99) || a.localeCompare(b));
 
@@ -187,8 +92,9 @@ function charts(s, rows, done, cfg, cl) {
               ? `<div class="stack" title="${esc(tip)}"><i class="s-scale" style="flex:${rate ?? 0}"></i><i class="s-rest" style="flex:${100 - (rate ?? 0)}"></i></div>`
               : `<div class="stack" title="${esc(tip)}">${yes ? `<i class="s-yes" style="flex:${yes}"></i>` : ""}${no ? `<i class="s-no" style="flex:${no}"></i>` : ""}${d.na ? `<i class="s-na" style="flex:${d.na}"></i>` : ""}${total ? "" : `<i class="s-na" style="flex:1"></i>`}</div>`;
             const share = c.type !== "critical" && scoredW ? (Number(c.weight || 0) / scoredW) * 100 : null;
-            return `<tr ${isCrit && d.yes ? 'style="background:var(--bad-soft)"' : ""}>
-              <td><span class="ct-title"><span><span class="mono muted">${esc(c.code || "")}</span> <b>${esc(c.title)}</b></span>${secTitle[c.section] ? `<small>${esc(secTitle[c.section])}</small>` : ""}</span></td>
+            const href = isCrit ? dlgLink({ crit: "violation" }) : dlgLink({ col: `${c.id}:Нет` });
+            return `<tr class="click" data-href="${esc(href)}" title="${isCrit ? "Показать диалоги с нарушением" : "Показать диалоги, где по критерию «Нет»"}" ${isCrit && d.yes ? 'style="background:var(--bad-soft)"' : ""}>
+              <td><span class="ct-title"><span><span class="mono muted">${esc(c.code || "")}</span> <a href="${esc(href)}"><b>${esc(c.title)}</b></a></span>${secTitle[c.section] ? `<small>${esc(secTitle[c.section])}</small>` : ""}</span></td>
               <td class="small muted col-opt">${typeShort(c)}</td>
               <td class="num col-opt" title="${share !== null ? `${fmtNum(share, 1)}% итога` : "без баллов"}">${c.type === "critical" ? "—" : fmtNum(c.weight)}</td>
               <td class="num col-opt">${c.type === "scale" ? "—" : yes}</td>
@@ -201,13 +107,13 @@ function charts(s, rows, done, cfg, cl) {
         </tbody>
       </table></div>
       ${weakest ? `<div class="card-pad" style="padding-top:0"><div class="insight">${icon("bulb")}<div>Чаще всего не выполняется: <b>${esc(weakest.c.code || "")} ${esc(weakest.c.title)}</b> — ${weakest.c.type === "scale" ? `средний балл ${esc(weakest.rateLabel)}` : `«Да» только в ${fmtNum(weakest.rate, 0)}% случаев`}. Хорошая тема для обучения операторов.
-        <div class="next-hint" style="margin-top:6px"><a href="#/conversations">Найти такие диалоги</a>${cl ? `<span aria-hidden="true">·</span><a href="#/checklists/${esc(cl.id)}">Уточнить формулировку в чек-листе</a>` : ""}</div></div></div></div>` : ""}
+        <div class="next-hint" style="margin-top:6px"><a href="${dlgLink({ col: `${weakest.c.id}:Нет` })}">Найти такие диалоги</a>${cl ? `<span aria-hidden="true">·</span><a href="#/checklists/${esc(cl.id)}">Уточнить формулировку в чек-листе</a>` : ""}</div></div></div></div>` : ""}
     </div>`;
 
   return `
     <div class="an-grid-2">
       <div class="card card-pad">
-        <div class="card-title">Средний итог по языкам</div>
+        <div class="card-title">Средний итог по языкам <span class="muted small">строка открывает диалоги</span></div>
         ${hbars(byLang, (k) => ({ label: k, sub: LANG[k] || "" }))}
       </div>
       <div class="card card-pad">

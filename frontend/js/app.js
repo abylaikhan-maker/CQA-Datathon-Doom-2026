@@ -8,7 +8,7 @@ import * as card from "./views/card.js";
 import * as checklists from "./views/checklists.js";
 import * as ruleCheck from "./views/rule-check.js";
 import * as appeals from "./views/appeals.js";
-import * as analytics from "./views/analytics.js";
+import * as overview from "./views/overview.js";
 import * as accuracy from "./views/accuracy.js";
 import * as regulations from "./views/regulations.js";
 import * as verify from "./views/verify.js";
@@ -23,7 +23,7 @@ const routes = [
   { re: /^\/appeals$/, view: appeals, nav: "appeals", title: "Апелляции", skel: "split" },
   { re: /^\/appeals\/(\d+)$/, view: appeals, nav: "appeals", keys: ["id"], title: "Апелляции", skel: "split" },
   { re: /^\/accuracy$/, view: accuracy, nav: "accuracy", title: "Точность", skel: "list" },
-  { re: /^\/analytics$/, view: analytics, nav: "analytics", title: "Аналитика", skel: "list" },
+  { re: /^\/(overview|analytics)$/, view: overview, nav: "overview", title: "Обзор", skel: "list" },
   { re: /^\/rules$/, view: rules, nav: "rules", title: "Правила из апелляций", skel: "list" },
   { re: /^\/regulations$/, view: regulations, nav: "regulations", title: "Регламенты", skel: "list" },
   { re: /^\/verify$/, view: verify, nav: "accuracy", title: "Проверка эталона", skel: "split" },
@@ -57,12 +57,12 @@ function loading(on) {
 }
 
 async function route() {
-  const hash = location.hash.replace(/^#/, "") || "/conversations";
+  const hash = location.hash.replace(/^#/, "") || "/overview";
   const [path, qstr] = hash.split("?");
   const query = Object.fromEntries(new URLSearchParams(qstr || ""));
   const m = routes.map((r) => ({ r, m: path.match(r.re) })).find((x) => x.m);
   const root = document.getElementById("view");
-  if (!m) { location.hash = "#/conversations"; return; }
+  if (!m) { location.hash = "#/overview"; return; }
 
   // Same card, only the query changed (e.g. ?msg=5) — let the view handle it in place.
   if (path === lastPath && m.r.view.onQuery) { m.r.view.onQuery(query); return; }

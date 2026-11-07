@@ -1370,3 +1370,47 @@ code, kbd, pre, samp, .mono { font-family: var(--font); font-variant-numeric: ta
 .conv-table col.cc-status { width: 9%; }
 .conv-table col.cc-crit { width: 10%; }
 .conv-criterion-score { white-space: nowrap; }
+
+/* ---------- Обзор ---------- */
+.ov-pick { align-items: flex-end; flex-wrap: wrap; }
+.ov-pick .field { min-width: 170px; margin: 0; }
+.ov-guide-reopen { margin-bottom: var(--sp-3); }
+.ov-kpis { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+a.kpi { text-decoration: none; color: inherit; }
+.ov-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 16px; margin-bottom: 16px; }
+.ov-stack { display: flex; height: 14px; border-radius: 7px; overflow: hidden; background: var(--na-bg); margin: 4px 0 14px; box-shadow: inset 0 0 0 1px var(--line-strong); }
+.ov-stack i { display: block; min-width: 3px; }
+.s-done { background: var(--good-solid); }
+.s-none { background: var(--na-mark); }
+.s-run { background: var(--mid); }
+.s-error { background: var(--bad-solid); }
+.s-ap { background: var(--warn-solid); }
+.ov-list, .ov-attn-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.ov-list li + li, .ov-attn-list li + li { border-top: 1px solid var(--line); }
+.ov-list a { display: grid; grid-template-columns: 12px 1fr auto 44px 14px; gap: 10px; align-items: center; padding: 9px 4px; color: var(--ink); text-decoration: none; border-radius: 6px; }
+.ov-list a:hover, .ov-attn-list a:hover { background: var(--brand-50); }
+.ov-list b { font-size: var(--fs-md); font-weight: 800; }
+.ov-pct { color: var(--ink-3); font-size: var(--fs-sm); text-align: right; }
+.ov-dot { width: 10px; height: 10px; border-radius: 3px; }
+.ov-list svg, .ov-attn-go svg { width: 14px; height: 14px; fill: none; stroke: var(--ink-3); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.ov-attn-list a { display: grid; grid-template-columns: 34px 1fr auto; gap: 12px; align-items: center; padding: 10px 4px; color: var(--ink); text-decoration: none; border-radius: 6px; }
+.ov-attn-ic { width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; background: var(--na-bg); color: var(--ink-2); box-shadow: inset 0 0 0 1px var(--line-strong); }
+.ov-attn-ic svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.ov-attn-list .is-bad .ov-attn-ic { background: var(--bad-bg); color: var(--bad); box-shadow: inset 0 0 0 1px var(--bad-line); }
+.ov-attn-list .is-warn .ov-attn-ic { background: var(--warn-bg); color: var(--warn); box-shadow: inset 0 0 0 1px var(--warn-line); }
+.ov-attn-list .is-brand .ov-attn-ic { background: var(--brand-50); color: var(--brand-700); box-shadow: inset 0 0 0 1px var(--brand-200); }
+.ov-attn-t { font-weight: 600; }
+.ov-attn-t b { font-size: var(--fs-md); font-weight: 800; margin-right: 2px; }
+.ov-attn-list .is-bad .ov-attn-t b { color: var(--bad); }
+.ov-attn-list .is-warn .ov-attn-t b { color: var(--warn); }
+.ov-attn-go { display: inline-flex; align-items: center; gap: 4px; color: var(--brand-700); font-size: var(--fs-sm); font-weight: 700; }
+.ov-ok { display: flex; gap: 12px; align-items: center; padding: 14px; border-radius: var(--radius); background: var(--good-bg); color: var(--good-ink); }
+.ov-ok svg { width: 22px; height: 22px; flex: none; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.ov-ok span { display: block; color: var(--ink-2); font-size: var(--fs-sm); }
+a.hbar { color: inherit; text-decoration: none; border-radius: 6px; padding: 2px 4px; margin-left: -4px; margin-right: -4px; }
+a.hbar:hover { background: var(--brand-50); }
+.crit-table td a { color: inherit; text-decoration: none; }
+.crit-table tr.click:hover td a b { text-decoration: underline; }
+@media (max-width: 1280px) { .ov-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 1000px) { .ov-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 760px) { .ov-pick .field { flex: 1 1 100%; } }
