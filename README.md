@@ -112,6 +112,25 @@ python3 tools/accuracy.py --api http://localhost:8090 --group SYNTH --gt samples
 python3 tools/push_checklist.py --api http://localhost:8090 --note "что изменено"   # загрузить чек-лист из файла новой версией
 ```
 
+## Выгрузка для хакатона
+
+Установите зависимости из `backend/requirements.txt` и запустите команды из корня репозитория. Подставьте зарегистрированное название команды.
+
+Чтобы выгрузить завершённый пакет из приложения, задайте `DATABASE_URL` для PostgreSQL приложения и передайте ID пакета. Скрипт прочитает исходные оценки модели из этого прогона. Для такого экспорта ключ Gemini не нужен.
+
+```bash
+python tools/submit_results.py dev --team "Название команды" --batch 5
+```
+
+Чтобы оценить новый набор, задайте `GEMINI_API_KEY` и `GEMINI_MODEL`. Для загрузки из API также задайте `DATASET_API_URL` и подставьте контрольный ID организаторов.
+
+```bash
+python tools/submit_results.py dev --team "Название команды" --input /path/to/invoke.json
+python tools/submit_results.py prod --team "Название команды" --group "Контрольный ID"
+```
+
+Для новой оценки скрипт использует `backend/app/default_checklist.json`, а для `--batch` берёт версию чек-листа сохранённого прогона. Результат записывается в `results/dev/results.json` (60 чатов и 5 звонков) или `results/prod/results.json` (10 чатов). Формат включает исходные ID, восемь критериев, объяснения и номера подтверждающих реплик от 1 по исходной расшифровке. Для новых цитат в `evidence_turns` включаются только ссылки, прошедшие сверку с текстом реплики. Если оценка диалога не удалась, его ID сохраняется с `status: "error"`. Проверьте итоговый список и ошибки перед commit и push.
+
 ## API (кратко)
 
 `POST /api/datasets/import {group_id}` · `POST /api/datasets/upload` · `GET /api/conversations` · `GET /api/conversations/{id}` · `GET /api/audio/{id}` · `POST|GET /api/ground-truth` · `GET /api/accuracy?group=` · `GET /api/accuracy/{batch}?compare=` · `GET|POST /api/checklists` · `POST /api/evaluations {conversation_id, checklist_id}` · `POST /api/batches {group, checklist_id, only_missing}` · `POST /api/appeals` · `POST /api/appeals/{id}/decision {decision: confirm|change, new_answer, reason}` · `GET /api/stats` · `GET /api/export.csv`
