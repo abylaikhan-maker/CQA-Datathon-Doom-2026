@@ -19,6 +19,8 @@ const FILTERS = [
 
 export async function render(root, params, query) {
   const [conv, checklists] = await Promise.all([api.conversation(params.id), api.checklists()]);
+  // Superseded by a newer navigation: the router already detached this host.
+  if (!root.isConnected) return undefined;
   const first = conv.transcript[0]?.timestamp;
   const seconds = conv.transcript.map((m) => tsSeconds(m.timestamp, first));
   const known = seconds.filter((s) => s !== null && s !== undefined);
@@ -34,6 +36,13 @@ export async function render(root, params, query) {
     root, conv, checklists, seconds: audioSec, isCall, evaluation: null, player: null,
     openCrit: query.crit || null, whyExpanded: false, followUntil: 0, loadingTimer: null, pollTimer: null,
     rel: isCall ? clock(audioSec) : null,
+  };
+  const mine = ctx;
+  const cleanup = () => {
+    if (mine.player) mine.player.destroy();
+    clearInterval(mine.loadingTimer);
+    clearTimeout(mine.pollTimer);
+    if (ctx === mine) ctx = null;
   };
 
   const chan = CHANNEL[conv.channel] || conv.channel || "";
@@ -125,15 +134,8 @@ export async function render(root, params, query) {
   const evId = query.eval ? Number(query.eval) : conv.evaluations[0]?.id;
   if (evId) await loadEvaluation(evId);
   else drawEmpty();
-  if (query.msg) focusMsg(Number(query.msg));
-
-  const mine = ctx;
-  return () => {
-    if (mine.player) mine.player.destroy();
-    clearInterval(mine.loadingTimer);
-    clearTimeout(mine.pollTimer);
-    if (ctx === mine) ctx = null;
-  };
+  if (ctx === mine && query.msg) focusMsg(Number(query.msg));
+  return cleanup;
 }
 
 export function onQuery(query) {
@@ -297,8 +299,10 @@ async function runEvaluation(btn) {
 }
 
 async function loadEvaluation(id) {
+  const owner = ctx;
   const ev = await api.evaluation(id);
-  if (!ctx) return;
+  // Navigated to another card (or away) while loading: don't draw into it.
+  if (!ctx || ctx !== owner || !owner.root.isConnected) return;
   drawEvaluation(ev);
 }
 
@@ -391,7 +395,7 @@ function drawEvaluation(ev) {
         const ss = secScore[g.id];
         return `<div class="cv-group">
           <div class="cv-group-h"><span>${esc(sectionTitle[g.id] || ss?.title || "")}</span>
-            ${ss ? `<span>${ss.max_points === null ? "без баллов" : `${fmtNum(ss.points)} / ${fmtNum(ss.max_points)}`}</span>` : ""}</div>
+            ${ss ? `<span>${ss.max_points !== null ? `${fmtNum(ss.points)} / ${fmtNum(ss.max_points)}` : g.items.every((c) => rowsBy[c.id].answer === "na") ? "все N/A — вес перераспределён" : "без баллов"}</span>` : ""}</div>
           ${g.items.map((c) => critHtml({
             row: rowsBy[c.id], crit: c, srow: scoreRows[c.id], orow: origRows[c.id], appeals: appealsBy[c.id] || [],
             msgs: ctx.conv.transcript, rel: ctx.rel, canAppeal: true, open: ctx.openCrit === c.id,
@@ -403,7 +407,12 @@ function drawEvaluation(ev) {
 
   bindHistory();
   panel.onclick = onPanelClick;
-  if (ctx.openCrit) toggleCrit(ctx.openCrit, true);
+  if (ctx.openCrit) {
+    toggleCrit(ctx.openCrit, true);
+    // Deep link (e.g. from an appeal): bring the opened criterion and its reviewer note into view.
+    const el = $(`.cv-crit[data-crit="${CSS.escape(ctx.openCrit)}"]`, ctx.root);
+    if (el) requestAnimationFrame(() => el.scrollIntoView({ block: "nearest", behavior: "smooth" }));
+  }
   else markEvidence(null);
 }
 

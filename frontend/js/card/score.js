@@ -10,7 +10,7 @@ export function ringHtml(value, size = 128) {
     <div class="cv-ring cv-tone-${tone}" style="width:${size}px;height:${size}px" role="img" aria-label="Итог ${has ? fmtNum(value) : "не рассчитан"} из 100">
       <svg viewBox="0 0 100 100" aria-hidden="true">
         <circle class="cv-ring-bg" cx="50" cy="50" r="${r}"/>
-        <circle class="cv-ring-fg" cx="50" cy="50" r="${r}" stroke-dasharray="${((c * v) / 100).toFixed(2)} ${c.toFixed(2)}"/>
+        ${v > 0 ? `<circle class="cv-ring-fg" cx="50" cy="50" r="${r}" stroke-dasharray="${((c * v) / 100).toFixed(2)} ${c.toFixed(2)}"/>` : ""}
       </svg>
       <div class="cv-ring-val"><b>${has ? fmtNum(value) : "—"}</b><span>/ 100</span></div>
     </div>`;
@@ -148,7 +148,7 @@ export function lossesHtml({ ev, critCfg, scoreRows, appealsBy, expanded }) {
               <p class="cv-why-text">${esc(shortReason(crit, row) || "—")}</p>
               <div class="cv-why-actions">
                 ${ref ? `<button type="button" class="btn btn-sm" data-jump="${esc(crit.id)}">Перейти к фрагменту${row.evidence && row.evidence[0] ? ` #${row.evidence[0]}` : ""}</button>` : ""}
-                ${open ? `<span class="cv-tag is-warn">апелляция на рассмотрении</span>` : `<button type="button" class="btn btn-sm btn-ghost cv-btn-appeal" data-appeal="${esc(crit.id)}">Оспорить оценку</button>`}
+                ${open ? `<span class="cv-tag is-warn">апелляция на рассмотрении</span>` : `<button type="button" class="btn btn-sm cv-btn-appeal" data-appeal="${esc(crit.id)}">Оспорить оценку</button>`}
               </div>
             </div>
           </li>`;

@@ -12,16 +12,20 @@ let newSet = new Set();      // criteria added in this editing session
 const TYPE_SHORT = { binary: "Да / Нет", scale: "Шкала", critical: "Грубая ошибка" };
 const FIELD = {
   id: "ID", code: "Код", title: "Название", section: "Секция", type: "Тип ответа", weight: "Вес",
-  na_allowed: "N/A разрешён", description: "Формулировка", na_condition: "Условие N/A", scale: "Шкала",
+  na_allowed: "N/A разрешён", description: "Формулировка", guidance: "Уточнения для оценки",
+  na_condition: "Условие N/A", scale: "Шкала",
 };
-const LONG_FIELDS = new Set(["description", "na_condition", "general_rules"]);
+const LONG_FIELDS = new Set(["description", "guidance", "na_condition", "general_rules"]);
 
 const store = {
   get: (k) => { try { return localStorage.getItem(k); } catch { return null; } },
   set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* ignore */ } },
 };
 
+let offUnload = null;
+
 export async function render(root, params) {
+  if (offUnload) { offUnload(); offUnload = null; }
   const list = await api.checklists();
   let current;
   if (params.id === "new") {
@@ -59,15 +63,16 @@ export async function render(root, params) {
       </section>
       <section class="card cl-editor" aria-label="Редактор чек-листа">
         <div class="card-head">
-          <div style="min-width:0">
-            <h2>${current.id ? `${esc(current.config.name)} <span class="muted">· v${esc(current.version)}</span>` : "Новый чек-лист"}</h2>
+          <div class="ed-head-main">
+            <h2>${current.id ? `${esc(current.config.name)} <span class="muted">· v${esc(current.version)}</span>` : "Новый чек-лист"}
+              ${current.is_active ? `<span class="badge yes">${icon("check")}активный</span>` : ""}</h2>
             ${current.id ? `<div class="muted small">${meta ? `создан ${esc(fmtDate(meta.created_at))} · ${meta.evaluations} ${plural(meta.evaluations, ["оценка", "оценки", "оценок"])}` : ""}${current.note ? ` · «${esc(current.note)}»` : ""}</div>` : `<div class="muted small">Заполните параметры и добавьте критерии</div>`}
           </div>
-          ${current.is_active ? `<span class="badge yes">${icon("check")}активный</span>` : ""}
-          <div class="spacer"></div>
-          ${current.id && !current.is_active ? `<button class="btn btn-sm" type="button" id="btn-activate">${icon("star")}Сделать активным</button>` : ""}
-          ${current.id ? `<button class="btn btn-sm" type="button" id="btn-apply">${icon("play")}Применить к набору…</button>` : ""}
-          <button class="btn btn-sm" type="button" id="btn-json">${icon("code")}JSON</button>
+          <div class="ed-head-actions">
+            ${current.id && !current.is_active ? `<button class="btn btn-sm" type="button" id="btn-activate">${icon("star")}Сделать активным</button>` : ""}
+            ${current.id ? `<button class="btn btn-sm" type="button" id="btn-apply">${icon("play")}Применить к набору…</button>` : ""}
+            <button class="btn btn-sm" type="button" id="btn-json">${icon("code")}JSON</button>
+          </div>
         </div>
         <div class="card-pad" id="editor"></div>
         <div class="save-bar" id="save-bar"></div>
@@ -111,7 +116,8 @@ export async function render(root, params) {
 
   const onUnload = (e) => { if (isDirty()) { e.preventDefault(); e.returnValue = ""; } };
   window.addEventListener("beforeunload", onUnload);
-  return () => window.removeEventListener("beforeunload", onUnload);
+  offUnload = () => window.removeEventListener("beforeunload", onUnload);
+  return offUnload;
 }
 
 /* ------------------------------------------------------------ model ---- */
@@ -649,7 +655,8 @@ async function applyDialog(cl, { justSaved = false } = {}) {
       ${groups.length ? `
         <label class="field">Набор диалогов
           <select class="input" id="ap-group">
-            ${groups.map((g) => `<option value="${esc(g.id)}" ${g.id === last ? "selected" : ""}>${esc(g.id)} (${g.count})</option>`).join("")}
+            <option value="__none" selected disabled>— выберите набор —</option>
+            ${groups.map((g) => `<option value="${esc(g.id)}">${esc(g.id)} (${g.count})${g.id === last ? " · последний" : ""}</option>`).join("")}
             <option value="">Все наборы</option>
           </select></label>
         <label class="check"><input type="checkbox" id="ap-missing" checked> Только диалоги без оценки этой версией</label>
@@ -658,7 +665,9 @@ async function applyDialog(cl, { justSaved = false } = {}) {
         : `<div class="note warn">Наборов пока нет — сначала импортируйте диалоги на странице «Диалоги».</div>`}`,
     onSubmit: async (el) => {
       if (!groups.length) { location.hash = "#/conversations"; return; }
-      const group = $("#ap-group", el).value || null;
+      const gv = $("#ap-group", el).value;
+      if (gv === "__none") { toast("Выберите набор диалогов", true); $("#ap-group", el).focus(); return false; }
+      const group = gv || null;
       const ok = $("[data-ok]", el);
       busy(ok, true, "Запуск…");
       try {
@@ -676,6 +685,7 @@ async function applyDialog(cl, { justSaved = false } = {}) {
   let seq = 0;
   async function estimate() {
     const my = ++seq;
+    if ($("#ap-group", m.el).value === "__none") { est.innerHTML = `<dt>Будет оценено</dt><dd class="muted">выберите набор</dd>`; return; }
     est.innerHTML = `<dt>Будет оценено</dt><dd><span class="spinner" aria-hidden="true"></span></dd>`;
     try {
       const rows = await api.conversations({ group: $("#ap-group", m.el).value || null, checklist_id: cl.id });
