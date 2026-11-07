@@ -46,6 +46,13 @@ export const api = {
   conversations: (params = {}) => req("GET", "/api/conversations" + qs(params)),
   conversation: (id) => req("GET", `/api/conversations/${encodeURIComponent(id)}`),
   audioUrl: (id) => `${base()}/api/audio/${encodeURIComponent(id)}`,
+  groundTruth: () => req("GET", "/api/ground-truth"),
+  uploadGroundTruth: (group, text, note) =>
+    req("POST", `/api/ground-truth?${new URLSearchParams({ group, ...(note ? { note } : {}) })}`, text, true),
+  accuracy: (group, gtId) => req("GET", `/api/accuracy?${new URLSearchParams({ group, ...(gtId ? { gt_id: gtId } : {}) })}`),
+  accuracyRun: (id, { gtId, compare } = {}) =>
+    req("GET", `/api/accuracy/${id}?${new URLSearchParams({ ...(gtId ? { gt_id: gtId } : {}), ...(compare ? { compare } : {}) })}`),
+  updateBatchNote: (id, note) => req("PATCH", `/api/batches/${id}`, { note }),
 
   checklists: () => req("GET", "/api/checklists"),
   checklist: (id) => req("GET", `/api/checklists/${id}`),

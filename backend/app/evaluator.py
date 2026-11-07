@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import time
 
-from . import config, db, llm, scoring
+from . import config, db, llm, scoring, version
 
 
 def _cost(usage: dict) -> float:
@@ -65,11 +65,11 @@ async def run(evaluation_id: int) -> None:
         await conn.execute(
             """UPDATE evaluations SET status='done', provider=$2, model=$3, criteria=$4, score=$5, total=$6,
                    critical=$7, final_criteria=$4, final_score=$5, final_total=$6, summary=$8, usage=$9,
-                   cost_usd=$10, duration_ms=$11, finished_at=now(), error=NULL
+                   cost_usd=$10, duration_ms=$11, finished_at=now(), error=NULL, pipeline=$12
                WHERE id=$1""",
             evaluation_id, config.effective_provider(), model, criteria, score, score["total"],
             score["critical"], out.get("summary") or "", usage, _cost(usage),
-            int((time.monotonic() - t0) * 1000))
+            int((time.monotonic() - t0) * 1000), version.pipeline())
 
 
 async def create(conversation_id: str, checklist_id: int, batch_id: int | None = None) -> int:

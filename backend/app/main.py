@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import audio, config, dataset, db, evaluator, scoring
+from . import accuracy, audio, config, dataset, db, evaluator, scoring, version
 
 _bg: set[asyncio.Task] = set()
 
@@ -314,6 +314,7 @@ class BatchReq(BaseModel):
     checklist_id: int | None = None
     conversation_ids: list[str] | None = None
     only_missing: bool = True
+    note: str | None = None  # what changed in this run — shown in the accuracy history
 
 
 @app.post("/api/batches")
@@ -328,8 +329,9 @@ async def create_batch(req: BatchReq):
                                             AND e.checklist_id=$4 AND e.status IN ('done','running','pending')))
                ORDER BY c.id""", req.group, req.conversation_ids, req.only_missing, kid)
         ids = [r["id"] for r in ids]
-        bid = await conn.fetchval("INSERT INTO batches (dataset_group, checklist_id, total) VALUES ($1,$2,$3) RETURNING id",
-                                  req.group, kid, len(ids))
+        bid = await conn.fetchval(
+            "INSERT INTO batches (dataset_group, checklist_id, total, note, pipeline) VALUES ($1,$2,$3,$4,$5) RETURNING id",
+            req.group, kid, len(ids), (req.note or "").strip() or None, version.pipeline())
     eids = [await evaluator.create(cid, kid, bid) for cid in ids]
     if eids:
         spawn(evaluator.run_batch(bid, eids))
@@ -459,6 +461,121 @@ async def decide_appeal(aid: int, body: DecisionIn, request: Request):
 
 
 # --------------------------------------------------------- stats & export ----
+# ---------------------------------------------------------------- accuracy ----
+# Ground truth is stored for measurement only and is never passed to the evaluator.
+@app.post("/api/ground-truth")
+async def upload_ground_truth(request: Request, group: str, note: str | None = None):
+    try:
+        payload = json.loads(await request.body())
+    except ValueError:
+        raise HTTPException(400, "Файл не является корректным JSON")
+    labels = accuracy.labels_of(payload)
+    if not labels:
+        raise HTTPException(400, "Не найдены метки: ожидается {\"labels\": {conversation_id: {c01: …}}}")
+    meta = {k: v for k, v in payload.items() if k.startswith("_")} if isinstance(payload, dict) else {}
+    async with db.pool.acquire() as conn:
+        async with conn.transaction():
+            await conn.execute("LOCK TABLE ground_truth IN SHARE ROW EXCLUSIVE MODE")
+            ver = await conn.fetchval("SELECT coalesce(max(version),0)+1 FROM ground_truth WHERE dataset_group=$1", group)
+            gid = await conn.fetchval(
+                "INSERT INTO ground_truth (dataset_group, version, labels, meta, note, author) "
+                "VALUES ($1,$2,$3,$4,$5,$6) RETURNING id",
+                group, ver, labels, meta, (note or "").strip() or None, user_email(request))
+        known = await conn.fetchval("SELECT count(*) FROM conversations WHERE dataset_group=$1 AND id = ANY($2)",
+                                    group, list(labels))
+    return {"id": gid, "group": group, "version": ver, "labels": len(labels), "matched_conversations": known}
+
+
+@app.get("/api/ground-truth")
+async def list_ground_truth():
+    async with db.pool.acquire() as conn:
+        rows = await conn.fetch(
+            """SELECT id, dataset_group, version, note, author, created_at, meta,
+                      (SELECT count(*) FROM jsonb_object_keys(labels)) AS labels
+               FROM ground_truth ORDER BY dataset_group, version DESC""")
+    return db.recs(rows)
+
+
+async def _gt(conn, group: str, gt_id: int | None):
+    if gt_id:
+        return await conn.fetchrow("SELECT * FROM ground_truth WHERE id=$1 AND dataset_group=$2", gt_id, group)
+    return await conn.fetchrow("SELECT * FROM ground_truth WHERE dataset_group=$1 ORDER BY version DESC LIMIT 1", group)
+
+
+async def _batch_accuracy(conn, batch: dict, labels: dict) -> dict:
+    rows = await conn.fetch(
+        """SELECT c.id, c.language, c.channel, e.id AS eval_id, e.criteria, e.total, e.critical
+           FROM evaluations e JOIN conversations c ON c.id=e.conversation_id
+           WHERE e.batch_id=$1 AND e.status='done'""", batch["id"])
+    cfg = await conn.fetchval("SELECT config FROM checklists WHERE id=$1", batch["checklist_id"])
+    return accuracy.compute(cfg, labels, db.recs(rows))
+
+
+_RUN_COLS = """b.id, b.dataset_group, b.checklist_id, b.total, b.done, b.failed, b.status, b.created_at,
+               b.finished_at, b.note, b.pipeline, k.version AS checklist_version, k.name AS checklist_name,
+               (SELECT coalesce(sum(cost_usd),0) FROM evaluations e WHERE e.batch_id=b.id) AS cost_usd,
+               (SELECT avg(duration_ms) FROM evaluations e WHERE e.batch_id=b.id AND e.status='done') AS avg_ms,
+               (SELECT e.pipeline FROM evaluations e WHERE e.batch_id=b.id AND e.pipeline IS NOT NULL LIMIT 1) AS eval_pipeline,
+               (SELECT e.model FROM evaluations e WHERE e.batch_id=b.id AND e.model IS NOT NULL LIMIT 1) AS model"""
+
+
+def _run_row(b: dict, m: dict) -> dict:
+    b = dict(b)
+    b["pipeline"] = b.pop("eval_pipeline") or b["pipeline"] or ({"model": b["model"]} if b.get("model") else None)
+    b.pop("model", None)
+    return {**b, **{k: m[k] for k in ("n_conversations", "n_answers", "accuracy", "accuracy_sure", "mae_total",
+                                       "within5", "critical_accuracy", "groups")},
+            "criteria": [{k: c[k] for k in ("criterion_id", "code", "accuracy")} for c in m["criteria"]]}
+
+
+@app.get("/api/accuracy")
+async def accuracy_runs(group: str, gt_id: int | None = None):
+    """Accuracy history: one row per batch (= one version of the system run on this group)."""
+    async with db.pool.acquire() as conn:
+        gt = await _gt(conn, group, gt_id)
+        if not gt:
+            return {"ground_truth": None, "runs": []}
+        batches = await conn.fetch(
+            f"SELECT {_RUN_COLS} FROM batches b LEFT JOIN checklists k ON k.id=b.checklist_id "
+            "WHERE b.dataset_group=$1 ORDER BY b.id", group)
+        runs = []
+        for b in batches:
+            m = await _batch_accuracy(conn, b, gt["labels"])
+            if m["n_conversations"]:
+                runs.append(_run_row(b, m))
+    g = dict(gt)
+    g["labels"] = len(g["labels"])
+    return {"ground_truth": g, "runs": runs}
+
+
+@app.get("/api/accuracy/{batch_id}")
+async def accuracy_run(batch_id: int, gt_id: int | None = None, compare: int | None = None):
+    """Full metrics of one run, with mismatches; with ?compare=<batch> also what got fixed / broken."""
+    async with db.pool.acquire() as conn:
+        b = await conn.fetchrow(f"SELECT {_RUN_COLS} FROM batches b LEFT JOIN checklists k ON k.id=b.checklist_id "
+                                "WHERE b.id=$1", batch_id)
+        if not b:
+            not_found("Прогон")
+        gt = await _gt(conn, b["dataset_group"], gt_id)
+        if not gt:
+            raise HTTPException(404, "Для этого набора нет эталона")
+        m = await _batch_accuracy(conn, b, gt["labels"])
+        out = {"run": _run_row(b, m), "metrics": m, "ground_truth_id": gt["id"], "ground_truth_version": gt["version"]}
+        if compare:
+            cb = await conn.fetchrow("SELECT * FROM batches WHERE id=$1", compare)
+            if not cb:
+                not_found("Прогон для сравнения")
+            out["compare"] = {"batch_id": compare, **accuracy.diff(await _batch_accuracy(conn, cb, gt["labels"]), m)}
+    return out
+
+
+@app.patch("/api/batches/{bid}")
+async def update_batch_note(bid: int, body: dict):
+    async with db.pool.acquire() as conn:
+        await conn.execute("UPDATE batches SET note=$2 WHERE id=$1", bid, (body.get("note") or "").strip() or None)
+    return await get_batch(bid)
+
+
 @app.get("/api/stats")
 async def stats(group: str | None = None, checklist_id: int | None = None):
     async with db.pool.acquire() as conn:

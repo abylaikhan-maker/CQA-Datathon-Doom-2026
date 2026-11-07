@@ -93,15 +93,25 @@ backend/app/
 docker run --rm -v "$PWD/backend:/w" -w /w python:3.12-slim sh -c "pip install -q pytest && python -m pytest -q tests"
 ```
 
-## Замер точности
+## Замер точности и версии системы
 
-`tools/accuracy.py` сравнивает последние оценки с ручной разметкой. Он выдаёт совпадение по каждому критерию, разбивку по языкам и каналам, среднюю ошибку итогового балла и список расхождений. Итог для эталона считается тем же `scoring.py`, что и в приложении.
+Вкладка **«Точность»** сравнивает исходные ответы модели (до апелляций) с ручной разметкой. Эталон используется только для замера и в промпт не попадает.
+
+- **Эталон** загружается JSON-файлом на набор диалогов (`{"labels": {id: {"c01": "yes", "c04": "20", …}}}`). Каждая загрузка — новая неизменяемая версия; точность можно смотреть по любой. Необязательные поля: `_uncertain` (спорные критерии, считаются отдельно), `_kind` (тип диалога для разбивки), `_note`.
+- **Версия системы — это прогон** («Новый прогон» на вкладке или «Оценить» в списке диалогов). К прогону автоматически записываются версия чек-листа, модель, бюджет рассуждений, отпечатки системного промпта и кода бэкенда, плюс заметка «что изменили».
+- **История версий** показывает по каждому прогону совпадение ответов, долю без спорных меток, разбивку по типам, ошибку итога и стоимость. Любой прогон можно выбрать базой (◎) и увидеть, какие ответы исправились, а какие сломались.
+- Детали прогона: точность по критериям и группам (язык, канал, тип), список расхождений со ссылкой на критерий в карточке.
+
+Цикл улучшения: изменить чек-лист, промпт или модель → «Новый прогон» с заметкой → сравнить с предыдущей версией. Повторный прогон той же версии показывает шум: на SYNTH два одинаковых прогона разошлись в 4 ответах из 240.
+
+То же из командной строки (`tools/accuracy.py` использует тот же модуль `backend/app/accuracy.py`):
 
 ```bash
-python3 tools/accuracy.py --api http://localhost:8090 --gt ground_truth.json --show c02,c06
+python3 tools/accuracy.py --api http://localhost:8090 --batch 4 --compare 3 --show c06     # прогон против прогона
+python3 tools/accuracy.py --api http://localhost:8090 --group SYNTH --gt samples/synthetic_ground_truth.json
 python3 tools/push_checklist.py --api http://localhost:8090 --note "что изменено"   # загрузить чек-лист из файла новой версией
 ```
 
 ## API (кратко)
 
-`POST /api/datasets/import {group_id}` · `POST /api/datasets/upload` · `GET /api/conversations` · `GET /api/conversations/{id}` · `GET /api/audio/{id}` · `GET|POST /api/checklists` · `POST /api/evaluations {conversation_id, checklist_id}` · `POST /api/batches {group, checklist_id, only_missing}` · `POST /api/appeals` · `POST /api/appeals/{id}/decision {decision: confirm|change, new_answer, reason}` · `GET /api/stats` · `GET /api/export.csv`
+`POST /api/datasets/import {group_id}` · `POST /api/datasets/upload` · `GET /api/conversations` · `GET /api/conversations/{id}` · `GET /api/audio/{id}` · `POST|GET /api/ground-truth` · `GET /api/accuracy?group=` · `GET /api/accuracy/{batch}?compare=` · `GET|POST /api/checklists` · `POST /api/evaluations {conversation_id, checklist_id}` · `POST /api/batches {group, checklist_id, only_missing}` · `POST /api/appeals` · `POST /api/appeals/{id}/decision {decision: confirm|change, new_answer, reason}` · `GET /api/stats` · `GET /api/export.csv`

@@ -8,6 +8,7 @@ import * as card from "./views/card.js";
 import * as checklists from "./views/checklists.js";
 import * as appeals from "./views/appeals.js";
 import * as analytics from "./views/analytics.js";
+import * as accuracy from "./views/accuracy.js";
 
 const routes = [
   { re: /^\/conversations$/, view: conversations, nav: "conversations", title: "Диалоги", skel: "list" },
@@ -16,6 +17,7 @@ const routes = [
   { re: /^\/checklists\/(new|\d+)$/, view: checklists, nav: "checklists", keys: ["id"], title: "Чек-листы", skel: "split" },
   { re: /^\/appeals$/, view: appeals, nav: "appeals", title: "Апелляции", skel: "split" },
   { re: /^\/appeals\/(\d+)$/, view: appeals, nav: "appeals", keys: ["id"], title: "Апелляции", skel: "split" },
+  { re: /^\/accuracy$/, view: accuracy, nav: "accuracy", title: "Точность", skel: "list" },
   { re: /^\/analytics$/, view: analytics, nav: "analytics", title: "Аналитика", skel: "list" },
 ];
 

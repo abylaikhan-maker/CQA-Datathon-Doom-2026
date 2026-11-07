@@ -74,3 +74,23 @@ CREATE TABLE IF NOT EXISTS batches (
     created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
     finished_at   TIMESTAMPTZ
 );
+
+-- Versioning for accuracy tracking: what produced a batch / evaluation, and why it was run.
+ALTER TABLE batches ADD COLUMN IF NOT EXISTS note TEXT;
+ALTER TABLE batches ADD COLUMN IF NOT EXISTS pipeline JSONB;
+ALTER TABLE evaluations ADD COLUMN IF NOT EXISTS pipeline JSONB;
+CREATE INDEX IF NOT EXISTS evaluations_batch_idx ON evaluations (batch_id);
+
+-- Hand-labelled reference answers per dataset group. Every upload is a new immutable version.
+-- Used only to measure accuracy; never sent to the model.
+CREATE TABLE IF NOT EXISTS ground_truth (
+    id            SERIAL PRIMARY KEY,
+    dataset_group TEXT NOT NULL,
+    version       INT NOT NULL,
+    labels        JSONB NOT NULL,
+    meta          JSONB,
+    note          TEXT,
+    author        TEXT,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (dataset_group, version)
+);
