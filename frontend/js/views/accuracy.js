@@ -3,7 +3,7 @@
 // model and settings, prompt / code fingerprints and a note on what changed. Any two runs
 // can be compared: what got fixed, what broke. The ground truth is only used here, never by the model.
 import { api } from "../api.js";
-import { esc, $, fmtNum, fmtDate, toast, modal } from "../util.js";
+import { esc, $, fmtNum, fmtDate, toast, modal, icon, plural } from "../util.js";
 
 const st = { group: "", gtId: "", run: null, base: null, crit: "", hideUnsure: false, poll: null };
 
@@ -45,26 +45,34 @@ export async function render(root, params, query) {
   if (st.base && !runs.some((r) => r.id === st.base)) st.base = null;
   if (st.base === null && runs.length > 1) st.base = runs[runs.length - 2].id;
 
+  const gcount = groups.find((g) => g.id === st.group)?.count ?? 0;
   root.innerHTML = `
     <div class="page-head">
       <div><h1>Точность</h1>
-        <div class="sub">Сравнение исходных ответов модели (до апелляций) с эталонной разметкой. Эталон используется только для замера и не передаётся модели.</div></div>
+        <div class="sub">Насколько ответы модели совпадают с ручной разметкой (эталоном). Сравниваются исходные ответы, до апелляций; модели эталон не передаётся.</div></div>
       <div class="spacer"></div>
-      <select class="input" id="acc-group" style="width:auto" aria-label="Набор диалогов">
-        ${groups.map((g) => `<option value="${esc(g.id)}" ${g.id === st.group ? "selected" : ""}>${esc(g.id)} · ${g.count}${withGt.includes(g.id) ? "" : " · без эталона"}</option>`).join("")}
-      </select>
-      ${versions.length ? `<select class="input" id="acc-gt" style="width:auto" aria-label="Версия эталона">
-        ${versions.map((v, i) => `<option value="${v.id}" ${String(v.id) === String(st.gtId) || (!st.gtId && i === 0) ? "selected" : ""}>Эталон v${v.version} · ${v.labels} диал.${i === 0 ? " (последний)" : ""}</option>`).join("")}
-      </select>` : ""}
-      <button class="btn" id="acc-upload">Загрузить эталон</button>
-      <button class="btn btn-primary" id="acc-run" ${st.group ? "" : "disabled"}>Новый прогон</button>
+      <div class="page-actions">
+        <a class="btn" href="#/verify">${icon("shield")}Проверка эталона</a>
+        <button class="btn" type="button" id="acc-upload">${icon("upload")}Загрузить эталон</button>
+        <button class="btn ${runs.length ? "btn-primary" : ""}" type="button" id="acc-run" ${st.group ? "" : "disabled"}>${icon("play")}Новый замер</button>
+      </div>
+    </div>
+    <div class="acc-tools">
+      <label class="field">Набор диалогов
+        <select class="input" id="acc-group">
+          ${groups.map((g) => `<option value="${esc(g.id)}" ${g.id === st.group ? "selected" : ""}>${esc(g.id)} · ${g.count}${withGt.includes(g.id) ? "" : " · без эталона"}</option>`).join("")}
+        </select></label>
+      ${versions.length ? `<label class="field">Версия эталона
+        <select class="input" id="acc-gt">
+        ${versions.map((v, i) => `<option value="${v.id}" ${String(v.id) === String(st.gtId) || (!st.gtId && i === 0) ? "selected" : ""}>Эталон v${v.version} · ${v.labels} ${plural(v.labels, ["диалог", "диалога", "диалогов"])}${i === 0 ? " (последний)" : ""}</option>`).join("")}
+      </select></label>` : ""}
     </div>
     <div id="acc-progress"></div>
-    ${!data.ground_truth ? emptyHtml() : !runs.length ? `<div class="card card-pad muted">Для набора ${esc(st.group)} ещё нет завершённых прогонов. Нажмите «Новый прогон».</div>` : `
+    ${!data.ground_truth ? startHtml({ hasGt: false, group: st.group, count: gcount }) : !runs.length ? startHtml({ hasGt: true, group: st.group, count: gcount, gt: data.ground_truth }) : `
       <div id="acc-kpis"></div>
       <section class="card acc-hist">
         <div class="card-head"><h2>История версий</h2><div class="spacer"></div>
-          <span class="muted small">Строка — прогон системы на наборе. Клик открывает детали, ◎ — база для сравнения.</span></div>
+          <span class="muted small">Строка — замер системы на наборе. Нажмите на строку, чтобы открыть детали; кружок слева выбирает базу для сравнения.</span></div>
         ${trendSvg(runs)}
         <div class="table-wrap acc-table-wrap">${historyTable(runs)}</div>
       </section>
@@ -72,6 +80,12 @@ export async function render(root, params, query) {
 
   $("#acc-group", root)?.addEventListener("change", (e) => { st.group = e.target.value; st.gtId = ""; st.run = st.base = null; render(root, params, {}); });
   $("#acc-gt", root)?.addEventListener("change", (e) => { st.gtId = e.target.value; render(root, params, {}); });
+  $(".acc-start", root)?.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-acc]");
+    if (!b) return;
+    if (b.dataset.acc === "upload") uploadDialog(root, params, groups);
+    if (b.dataset.acc === "run") runDialog(root, params);
+  });
   $("#acc-upload", root).addEventListener("click", () => uploadDialog(root, params, groups));
   $("#acc-run", root).addEventListener("click", () => runDialog(root, params));
   if (!runs.length) return stop;
@@ -93,17 +107,48 @@ function stop() {
   if (st.poll) { clearInterval(st.poll); st.poll = null; }
 }
 
-function emptyHtml() {
+// First-run state: what this page measures and the next action.
+function startHtml({ hasGt, group, count, gt }) {
+  const step = (n, done, title, text, action) => `
+    <li class="${done ? "is-done" : ""}">
+      <span class="n" aria-hidden="true">${done ? icon("check") : n}</span>
+      <b>${title}${done ? '<span class="sr-only"> — готово</span>' : ""}</b>
+      <span>${text}</span>
+      ${action ? `<div class="row">${action}</div>` : ""}
+    </li>`;
+  const steps = [
+    step(1, hasGt, "Загрузите эталон",
+      hasGt ? `Для набора ${esc(group)} есть эталон${gt?.version ? ` v${esc(gt.version)}` : ""}.` : `Для набора ${esc(group || "—")} эталона пока нет. Это JSON с ручными ответами по каждому критерию.`,
+      hasGt ? "" : `<button class="btn btn-primary" type="button" data-acc="upload">${icon("upload")}Загрузить эталон</button>`),
+    step(2, false, "Проверьте разметку",
+      "Метки, сделанные вручную или черновиком, стоит подтвердить: спорные помечаются и считаются отдельно.",
+      `<a class="btn" href="#/verify">${icon("shield")}Проверка эталона</a>`),
+    step(3, false, "Запустите замер",
+      `Модель заново оценит ${count} ${plural(count, ["диалог", "диалога", "диалогов"])} набора, а здесь появятся совпадение ответов, ошибки по критериям и история версий.`,
+      hasGt ? `<button class="btn btn-primary" type="button" data-acc="run">${icon("play")}Новый замер</button>` : ""),
+  ];
   return `
-    <div class="card card-pad acc-empty">
-      <h3>Для этого набора нет эталона</h3>
-      <p class="muted">Загрузите JSON с ручной разметкой. Каждая загрузка сохраняется как новая версия эталона, старые версии остаются.</p>
+    <section class="card acc-start" aria-labelledby="acc-start-h">
+      <div>
+        <h2 id="acc-start-h">${hasGt ? "Эталон есть, замеров ещё нет" : "Как измерить точность"}</h2>
+        <p>Эта страница показывает, в скольких ответах модель совпала с человеком. Так видно, стал ли чек-лист, промпт или модель лучше после изменений.</p>
+        <p class="small muted">Каждый замер фиксирует версию чек-листа, модель и промпт, поэтому любые два замера можно сравнить: что исправилось и что сломалось.</p>
+        ${hasGt ? "" : formatHelp()}
+      </div>
+      <ol class="acc-steps">${steps.join("")}</ol>
+    </section>`;
+}
+
+function formatHelp() {
+  return `
+    <details class="acc-fmt acc-empty">
+      <summary>Формат файла эталона</summary>
       <pre class="mono small">{ "labels": {
     "p1-ru-001": { "c01": "yes", "c02": "na", "c04": "20", "c06": "10", "_uncertain": ["c02"], "_kind": "normal" },
     …
 } }</pre>
       <p class="muted small">Ответы: yes / no / na или ступень шкалы. Необязательно: <span class="mono">_uncertain</span> — спорные критерии (считаются отдельно), <span class="mono">_kind</span> — тип диалога для разбивки, <span class="mono">_note</span> — комментарий.</p>
-    </div>`;
+    </details>`;
 }
 
 // ---------------------------------------------------------------- history ----
@@ -116,7 +161,7 @@ function trendSvg(runs) {
   const y = (v) => H - P - ((v - lo) / Math.max(1, hi - lo)) * (H - 2 * P);
   const pts = runs.map((r, i) => `${x(i).toFixed(1)},${y(r.accuracy ?? lo).toFixed(1)}`).join(" ");
   return `
-    <div class="acc-trend" aria-label="Совпадение ответов по прогонам">
+    <div class="acc-trend" aria-label="Совпадение ответов по замерам">
       <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
         <line x1="${P}" x2="${W - P}" y1="${y(hi)}" y2="${y(hi)}" class="grid"/><line x1="${P}" x2="${W - P}" y1="${y(lo)}" y2="${y(lo)}" class="grid"/>
         <polyline points="${pts}" class="line"/>
@@ -131,11 +176,11 @@ function historyTable(runs) {
   return `
     <table class="table">
       <thead><tr>
-        <th title="База для сравнения">◎</th><th>Прогон</th><th>Что изменили</th><th>Чек-лист</th><th>Модель</th>
-        <th title="Бюджет рассуждений модели">Рассужд.</th><th title="Отпечатки системного промпта и кода бэкенда">Промпт · код</th>
-        <th class="num">Диал.</th><th class="num">Совпадение</th><th class="num">Без спорных</th>
+        <th class="acc-base-h" title="База для сравнения"><span class="sr-only">База для сравнения</span>${icon("target")}</th><th>Замер</th><th>Что изменили</th><th>Чек-лист</th><th>Модель</th>
+        <th title="Бюджет рассуждений модели">Рассуждения</th><th title="Отпечатки системного промпта и кода бэкенда">Версия промпта</th>
+        <th class="num">Диалогов</th><th class="num">Совпадение</th><th class="num">Без спорных</th>
         ${kinds.map((k) => `<th class="num">${esc(groupLabel(k)[0])}</th>`).join("")}
-        <th class="num" title="Средняя ошибка итогового балла">MAE итога</th><th class="num">$ / оценку</th>
+        <th class="num" title="Средняя абсолютная ошибка итогового балла (MAE)">Ошибка итога</th><th class="num">$ / оценку</th>
       </tr></thead>
       <tbody>
         ${runs.map((r, i) => {
@@ -143,13 +188,13 @@ function historyTable(runs) {
           const p = r.pipeline || {};
           return `
           <tr class="click ${r.id === st.run ? "acc-cur" : ""}" data-run="${r.id}">
-            <td><button class="acc-radio ${r.id === st.base ? "on" : ""}" data-base="${r.id}" aria-label="Сделать прогон #${r.id} базой для сравнения" title="База для сравнения"></button></td>
+            <td><button class="acc-radio ${r.id === st.base ? "on" : ""}" data-base="${r.id}" aria-label="Сделать замер #${r.id} базой для сравнения" title="База для сравнения"></button></td>
             <td><b>#${r.id}</b><div class="muted small">${fmtDate(r.created_at)}</div></td>
-            <td class="acc-note">${r.note ? esc(r.note) : `<span class="muted">—</span>`} <button class="btn btn-ghost btn-sm" data-note="${r.id}" title="Изменить заметку" aria-label="Изменить заметку">✎</button></td>
+            <td class="acc-note">${r.note ? esc(r.note) : `<span class="muted">—</span>`} <button class="btn btn-ghost btn-sm" data-note="${r.id}" title="Изменить заметку" aria-label="Изменить заметку к замеру #${r.id}">${icon("edit")}</button></td>
             <td>v${esc(r.checklist_version ?? "?")}</td>
             <td class="small">${esc(p.model || "—")}</td>
             <td>${thinking(p)}</td>
-            <td class="mono small">${esc(p.prompt_hash || "—")} · ${esc(p.code_hash || "—")}</td>
+            <td class="mono small" title="Код: ${esc(p.code_hash || "—")}">${esc(p.prompt_hash || "—")}</td>
             <td class="num">${r.n_conversations}</td>
             <td class="num"><b>${pct(r.accuracy)}</b> ${delta(r.accuracy, prev?.accuracy)}</td>
             <td class="num">${pct(r.accuracy_sure)}</td>
@@ -178,7 +223,7 @@ async function drawDetail(root, runs) {
       <div class="card kpi"><div class="lbl">Ошибка итога (MAE)</div><div class="v">${m.mae_total ?? "—"}<small> балла</small></div>${base ? `<div class="small">${delta(m.mae_total, base.mae_total, { invert: true, unit: "" })}</div>` : ""}</div>
       <div class="card kpi"><div class="lbl">Итог в пределах ±5</div><div class="v">${pct(m.within5)}</div></div>
       <div class="card kpi"><div class="lbl">Флаг грубой ошибки</div><div class="v">${pct(m.critical_accuracy)}</div></div>
-      <div class="card kpi"><div class="lbl">Ответов сравнено</div><div class="v">${m.n_answers}<small> · ${m.n_conversations} диал.</small></div></div>
+      <div class="card kpi"><div class="lbl">Ответов сравнено</div><div class="v">${m.n_answers}</div><div class="foot">в ${m.n_conversations} ${plural(m.n_conversations, ["диалоге", "диалогах", "диалогах"])}</div></div>
     </div>`;
 
   const crits = [...new Set(m.items.flatMap((it) => it.mismatches.map((x) => x.criterion_id)))];
@@ -191,7 +236,7 @@ async function drawDetail(root, runs) {
   host.innerHTML = `
     <div class="an-grid acc-grid">
       <section class="card card-pad">
-        <h3>По критериям · прогон #${run.id}</h3>
+        <h3>По критериям <span class="muted small">замер #${run.id}</span></h3>
         ${m.criteria.map((c) => {
           const b = base?.criteria?.find((x) => x.criterion_id === c.criterion_id);
           const top = c.errors.slice(0, 3).map((e) => `${ANS[e.gt] || e.gt}→${ANS[e.model] || e.model} ×${e.count}`).join(", ");
@@ -212,11 +257,12 @@ async function drawDetail(root, runs) {
             <div class="track"><div class="fill ${g.accuracy < 85 ? "weak" : ""}" style="width:${g.accuracy ?? 0}%"></div></div>
             <span class="num">${pct(g.accuracy)}</span>
           </div>`).join("")}
-        <h3 style="margin-top:18px">Конфигурация прогона</h3>
+        <h3 style="margin-top:18px">Конфигурация замера</h3>
         <dl class="acc-dl small">
           <dt>Чек-лист</dt><dd>${esc(run.checklist_name || "")} · v${esc(run.checklist_version ?? "?")}</dd>
           <dt>Модель</dt><dd>${esc(run.pipeline?.model || "—")} · рассуждения: ${thinking(run.pipeline)}</dd>
-          <dt>Промпт · код</dt><dd class="mono">${esc(run.pipeline?.prompt_hash || "—")} · ${esc(run.pipeline?.code_hash || "—")}</dd>
+          <dt>Версия промпта</dt><dd class="mono">${esc(run.pipeline?.prompt_hash || "—")}</dd>
+          <dt>Версия кода</dt><dd class="mono">${esc(run.pipeline?.code_hash || "—")}</dd>
           <dt>Эталон</dt><dd>v${res.ground_truth_version}</dd>
           <dt>Стоимость · время</dt><dd>$${fmtNum(run.cost_usd || 0, 3)} · ${run.avg_ms ? fmtNum(run.avg_ms / 1000, 1) + " с на оценку" : "—"}</dd>
         </dl>
@@ -238,7 +284,7 @@ async function drawDetail(root, runs) {
             ${rows.map(({ it, x }) => `
               <tr>
                 <td class="acc-id"><a href="${link(it, x.criterion_id)}" class="mono">${esc(it.id)}</a>
-                  <div class="muted small">${esc(it.language || "")}${it.kind ? ` · ${esc(KIND[it.kind] || it.kind)}` : ""}</div></td>
+                  <div class="muted small meta-list"><span>${esc(it.language || "")}</span>${it.kind ? `<span>${esc(KIND[it.kind] || it.kind)}</span>` : ""}</div></td>
                 <td>${esc(critTitle[x.criterion_id] || x.criterion_id)}${x.uncertain ? ` <span class="badge warn" title="Метка помечена в эталоне как спорная">спорно</span>` : ""}</td>
                 <td>${ansBadge(x.gt, critical.has(x.criterion_id))}</td><td>${ansBadge(x.model, critical.has(x.criterion_id))}</td>
                 <td class="small acc-expl">${esc(x.explanation || "")}</td>
@@ -263,12 +309,12 @@ function compareHtml(d, run, critTitle, itemOf, critical) {
   };
   return `
     <section class="card card-pad acc-compare">
-      <h3>Прогон #${run.id} против #${d.batch_id}</h3>
+      <h3>Замер #${run.id} против #${d.batch_id}</h3>
       <div class="acc-compare-cols">
         <div><div class="acc-delta up">Исправлено: ${d.fixed.length}</div><ul>${d.fixed.map((x) => line(x, "fixed")).join("") || "<li class=muted>—</li>"}</ul></div>
         <div><div class="acc-delta down">Сломано: ${d.broken.length}</div><ul>${d.broken.map((x) => line(x, "broken")).join("") || "<li class=muted>—</li>"}</ul></div>
       </div>
-      <div class="muted small">Ошибок осталось в обоих прогонах: ${d.still.length}${d.still.some((x) => x.was !== x.now) ? ` (из них с другим неверным ответом: ${d.still.filter((x) => x.was !== x.now).length})` : ""}</div>
+      <div class="muted small">Ошибок осталось в обоих замерах: ${d.still.length}${d.still.some((x) => x.was !== x.now) ? ` (из них с другим неверным ответом: ${d.still.filter((x) => x.was !== x.now).length})` : ""}</div>
     </section>`;
 }
 
@@ -299,8 +345,8 @@ async function runDialog(root, params) {
   const cls = await api.checklists();
   const active = cls.find((c) => c.is_active) || cls[0];
   modal({
-    title: `Новый прогон · ${st.group}`,
-    submitText: "Запустить",
+    title: `Новый замер: набор ${st.group}`,
+    submitText: "Начать замер",
     body: `
       <label class="field">Чек-лист
         <select class="input" id="run-cl">${cls.map((c) => `<option value="${c.id}" ${c.id === active?.id ? "selected" : ""}>${esc(c.name)} · v${c.version}${c.is_active ? " (активный)" : ""}</option>`).join("")}</select></label>
@@ -321,9 +367,9 @@ function watch(root, params, id) {
   const tick = async () => {
     const b = await api.batchStatus(id).catch(() => null);
     if (!b || !bar.isConnected) return stop();
-    bar.innerHTML = `<div class="card card-pad acc-running">Прогон #${b.id}: ${b.done + b.failed} из ${b.total}${b.failed ? ` · ошибок ${b.failed}` : ""} · $${fmtNum(b.cost_usd || 0, 3)}
+    bar.innerHTML = `<div class="card card-pad acc-running">Замер #${b.id}: ${b.done + b.failed} из ${b.total}${b.failed ? ` · ошибок ${b.failed}` : ""} · $${fmtNum(b.cost_usd || 0, 3)}
       <div class="acc-bar"><i style="width:${b.total ? ((b.done + b.failed) / b.total) * 100 : 0}%"></i></div></div>`;
-    if (b.status === "finished") { stop(); st.run = b.id; toast(`Прогон #${b.id} завершён`); render(root, params, {}); }
+    if (b.status === "finished") { stop(); st.run = b.id; toast(`Замер #${b.id} завершён`); render(root, params, {}); }
   };
   tick();
   st.poll = setInterval(tick, 3000);
@@ -331,7 +377,7 @@ function watch(root, params, id) {
 
 function noteDialog(root, params, run) {
   modal({
-    title: `Заметка к прогону #${run.id}`,
+    title: `Заметка к замеру #${run.id}`,
     body: `<label class="field">Что изменили<textarea class="input" id="n-text" rows="3">${esc(run.note || "")}</textarea></label>`,
     onSubmit: async (dlg) => { await api.updateBatchNote(run.id, $("#n-text", dlg).value); render(root, params, {}); },
   });

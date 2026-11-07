@@ -5,8 +5,9 @@ import { api } from "../api.js";
 import { esc, $, $$, fmtNum, fmtDate, toast, busy, modal, answerView, tsSeconds, fmtClock, LANG, CHANNEL } from "../util.js";
 import { refreshBadge } from "../app.js";
 import { createPlayer, buildSegments, audioTimeline } from "../card/player.js";
-import { msgHtml, scrollInBox } from "../card/transcript.js";
-import { ringHtml, critHtml, lossesHtml, metaHtml, loadingHtml, updateLoading, firstRef, plural } from "../card/score.js";
+import { transcriptHtml, scrollInBox, revealMsg, collapseAuto, bindRuns } from "../card/transcript.js";
+import { ringHtml, critHtml, lossesHtml, metaHtml, loadingHtml, updateLoading, firstRef, plural, icHtml, scoreBadgeHtml } from "../card/score.js";
+import { cvIcon, scrollBehavior } from "../card/icons.js";
 
 let ctx = null;
 
@@ -14,7 +15,7 @@ const FILTERS = [
   { key: "all", label: "Все" },
   { key: "client", label: "Клиент" },
   { key: "operator", label: "Оператор" },
-  { key: "ctx", label: "Бот · система" },
+  { key: "ctx", label: "Бот и система" },
 ];
 
 export async function render(root, params, query) {
@@ -34,8 +35,9 @@ export async function render(root, params, query) {
   const audioSec = isCall && conv.audio_url ? audioTimeline(conv.transcript, seconds, null) : seconds;
   ctx = {
     root, conv, checklists, seconds: audioSec, isCall, evaluation: null, player: null,
+    checklistId: active ? active.id : null, clCache: new Map(),
     openCrit: query.crit || null, whyExpanded: false, followUntil: 0, loadingTimer: null, pollTimer: null,
-    rel: isCall ? clock(audioSec) : null,
+    rel: isCall ? clock(audioSec) : null, keep: new Set(),
   };
   const mine = ctx;
   const cleanup = () => {
@@ -45,48 +47,49 @@ export async function render(root, params, query) {
     if (ctx === mine) ctx = null;
   };
 
-  const chan = CHANNEL[conv.channel] || conv.channel || "";
+  const chan = CHANNEL[conv.channel] || conv.channel || (isCall ? "Звонок" : "Чат");
+  const n = conv.transcript.length;
   root.innerHTML = `
-    <div class="crumbs"><a href="#/conversations">Диалоги</a> / ${esc(conv.dataset_group || "")}</div>
-    <div class="page-head cv-head">
-      <div class="cv-head-main">
-        <h1>Анализ разговора</h1>
-        <div class="cv-head-sub">
-          <span class="cv-chip cv-chip-${isCall ? "call" : "chat"}">${isCall ? "🎧" : "💬"} ${esc(chan)}</span>
-          <span class="mono">${esc(conv.id)}</span>
-          ${conv.language ? `<span>${esc(LANG[conv.language] || conv.language)}</span>` : ""}
-          ${duration ? `<span>${fmtClock(duration)}</span>` : ""}
-          <span>${conv.transcript.length} ${plural(conv.transcript.length, "реплика", "реплики", "реплик")}</span>
+    <div class="cv-page">
+    <div class="crumbs"><a href="#/conversations">Диалоги</a> / Разбор диалога</div>
+    <header class="cv-head">
+      <div class="cv-id">
+        <span class="cv-id-ic cv-id-${isCall ? "call" : "chat"}" aria-hidden="true">${cvIcon(isCall ? "phone" : "chat")}</span>
+        <div class="cv-id-main">
+          <h1 class="cv-id-title"><span class="cv-sr">${esc(chan)} </span>${esc(conv.id)}</h1>
+          <ul class="cv-facts" aria-label="О диалоге">
+            <li>${cvIcon(isCall ? "phone" : "chat")}${esc(chan)}</li>
+            ${conv.language ? `<li>${cvIcon("globe")}${esc(LANG[conv.language] || conv.language)}</li>` : ""}
+            ${duration ? `<li title="${isCall ? "Длительность разговора по меткам расшифровки; запись звонка может быть длиннее" : "Длительность по меткам времени"}">${cvIcon("clock")}${isCall ? "разговор " : ""}${fmtClock(duration)}</li>` : ""}
+            <li>${cvIcon("msgs")}${n} ${plural(n, "реплика", "реплики", "реплик")}</li>
+            ${conv.dataset_group ? `<li title="Набор данных">${cvIcon("list")}набор ${esc(conv.dataset_group)}</li>` : ""}
+          </ul>
         </div>
       </div>
-      <div class="spacer"></div>
-      <div class="cv-eval-ctl">
-        <label class="cv-sr" for="sel-checklist">Чек-лист</label>
-        <select class="input" id="sel-checklist">
-          ${checklists.map((c) => `<option value="${c.id}" ${c.id === active?.id ? "selected" : ""}>${esc(c.name)} · v${c.version}${c.is_active ? " (активный)" : ""}</option>`).join("")}
-        </select>
-        <button class="btn btn-primary" id="btn-eval" type="button">Оценить</button>
-      </div>
-    </div>
+      <div class="cv-head-score" id="cv-head-score"></div>
+      <div class="cv-eval-ctl" id="cv-eval-ctl"></div>
+    </header>
     ${isCall ? `<div id="cv-player-host"></div>` : ""}
-    <div class="cv-grid">
+    <div class="cv-grid" id="cv-grid">
       <section class="card cv-tr-card" aria-label="Расшифровка">
         <div class="card-head cv-tr-head">
           <h2>Расшифровка</h2><div class="spacer"></div>
-          <div class="cv-filter" role="group" aria-label="Фильтр по участнику">
+          <div class="cv-filter" role="group" aria-label="Показать реплики">
             ${FILTERS.filter((f) => f.key !== "ctx" || hasCtx).map((f) => `<button type="button" data-filter="${f.key}" aria-pressed="${f.key === "all"}">${esc(f.label)}</button>`).join("")}
           </div>
         </div>
         <div class="cv-tr-ctx" id="cv-tr-ctx" hidden></div>
         <div class="cv-transcript" id="transcript" data-filter="all" tabindex="0" aria-label="Реплики диалога">
-          ${conv.transcript.map((m, i) => msgHtml(m, i + 1, { sec: audioSec[i], playable: isCall && !!conv.audio_url })).join("")}
+          ${transcriptHtml(conv.transcript, { secs: audioSec, playable: isCall && !!conv.audio_url })}
         </div>
-        <button type="button" class="cv-follow" id="cv-follow" hidden>↓ К текущей реплике</button>
+        <button type="button" class="cv-follow" id="cv-follow" hidden>${cvIcon("arrowDown")}К текущей реплике</button>
       </section>
-      <section class="card cv-ev-card" id="eval-panel" aria-label="Оценка качества"></section>
+      <section class="card cv-ev-card" id="eval-panel" aria-label="Оценка качества" tabindex="-1"></section>
+    </div>
     </div>`;
 
   const tr = $("#transcript", root);
+  bindRuns(tr);
   tr.addEventListener("click", (e) => {
     const p = e.target.closest("[data-play]");
     if (p) playAt(Number(p.dataset.play));
@@ -97,14 +100,32 @@ export async function render(root, params, query) {
   $("#cv-follow", root).addEventListener("click", () => {
     ctx.followUntil = 0;
     $("#cv-follow", root).hidden = true;
-    const el = $(".cv-msg.is-playing", root);
+    const el = playingEl();
     if (el) scrollInBox(tr, el);
   });
   $$("[data-filter]", root).forEach((b) => b.addEventListener("click", () => setFilter(b.dataset.filter)));
   $("#cv-tr-ctx", root).addEventListener("click", (e) => {
     if (e.target.closest("[data-clear]")) toggleCrit(ctx.openCrit);
   });
-  $("#btn-eval", root).addEventListener("click", (e) => runEvaluation(e.currentTarget));
+  // Evaluation controls live either in the header (re-evaluate) or in the empty panel (first run).
+  root.addEventListener("change", (e) => {
+    const sel = e.target.closest("[data-sel-checklist]");
+    if (!sel || !ctx) return;
+    ctx.checklistId = Number(sel.value);
+    $$("[data-sel-checklist]", root).forEach((s) => { if (s !== sel) s.value = sel.value; });
+    if (!ctx.evaluation) paintPreview();
+  });
+  root.addEventListener("click", (e) => {
+    const run = e.target.closest("[data-run-eval]");
+    if (run) { runEvaluation(run); return; }
+    const go = e.target.closest("[data-goto-score]");
+    if (go) {
+      e.preventDefault();
+      const panel = $("#eval-panel", root);
+      panel.scrollIntoView({ block: "start", behavior: scrollBehavior() });
+      panel.focus({ preventScroll: true });
+    }
+  });
 
   if (isCall) {
     const mineCtx = ctx;
@@ -176,6 +197,9 @@ function focusMsg(n, { seek = true, scroll = true, page = false } = {}) {
   if (!el) return;
   const tr = $("#transcript", ctx.root);
   if (tr.dataset.filter !== "all" && !matchesFilter(el, tr.dataset.filter)) setFilter("all");
+  // A message inside a collapsed bot/system run: open the run (and close runs opened only for the previous focus).
+  collapseAuto(tr, new Set([...ctx.keep, n]));
+  revealMsg(el);
   $$(".cv-msg.is-focus", ctx.root).forEach((m) => m.classList.remove("is-focus"));
   el.classList.add("is-focus");
   // restart the flash animation
@@ -185,7 +209,7 @@ function focusMsg(n, { seek = true, scroll = true, page = false } = {}) {
     scrollInBox(tr, el);
     // Explicit jumps also bring the transcript itself into view (single-column / mobile layout).
     const r = tr.getBoundingClientRect();
-    if (page && (r.bottom < 80 || r.top > window.innerHeight - 80)) $(".cv-tr-card", ctx.root).scrollIntoView({ block: "start", behavior: "smooth" });
+    if (page && (r.bottom < 80 || r.top > window.innerHeight - 80)) $(".cv-tr-card", ctx.root).scrollIntoView({ block: "start", behavior: scrollBehavior() });
   }
   if (ctx.player) {
     ctx.player.setMarks({ focus: n });
@@ -195,41 +219,82 @@ function focusMsg(n, { seek = true, scroll = true, page = false } = {}) {
 
 const matchesFilter = (el, f) => f === "all" || (f === "ctx" ? !["client", "operator"].includes(el.dataset.sp) : el.dataset.sp === f);
 
+/** The element that represents the playing message: the message, or its collapsed run. */
+function playingEl() {
+  const el = ctx && $(".cv-msg.is-playing", ctx.root);
+  return el ? el.closest(".cv-run.is-collapsed") || el : null;
+}
+
 function karaoke(n, isPlaying) {
   if (!ctx) return;
-  $$(".cv-msg.is-playing", ctx.root).forEach((m) => m.classList.remove("is-playing"));
+  $$(".cv-msg.is-playing, .cv-run.is-playing", ctx.root).forEach((m) => m.classList.remove("is-playing"));
   if (!n) return;
   const el = $(`#msg-${n}`, ctx.root);
   if (!el) return;
   el.classList.add("is-playing");
-  if (!isPlaying) return;
+  // Inside a collapsed context run: light up the run row instead of expanding it mid-playback.
   const tr = $("#transcript", ctx.root);
+  const run = el.closest(".cv-run.is-collapsed");
+  if (run) run.classList.add("is-playing");
+  if (!isPlaying) return;
   const follow = $("#cv-follow", ctx.root);
-  if (Date.now() >= ctx.followUntil) { scrollInBox(tr, el); follow.hidden = true; }
+  if (Date.now() >= ctx.followUntil) { scrollInBox(tr, run || el); follow.hidden = true; }
   else follow.hidden = false;
 }
 
 function markEvidence(row, crit) {
   $$(".cv-msg.is-evidence, .cv-msg.in-range", ctx.root).forEach((m) => m.classList.remove("is-evidence", "in-range"));
+  const tr = $("#transcript", ctx.root);
   const bar = $("#cv-tr-ctx", ctx.root);
   const range = [];
   if (row && row.checked_range) for (let n = row.checked_range[0]; n <= row.checked_range[1]; n++) range.push(n);
+  const evidence = row ? row.evidence || [] : [];
+  ctx.keep = new Set(evidence);
+  collapseAuto(tr, ctx.keep);
   if (row) {
-    (row.evidence || []).forEach((n) => $(`#msg-${n}`, ctx.root)?.classList.add("is-evidence"));
+    evidence.forEach((n) => {
+      const el = $(`#msg-${n}`, ctx.root);
+      if (!el) return;
+      el.classList.add("is-evidence");
+      revealMsg(el); // evidence is never hidden inside a collapsed run
+    });
     range.forEach((n) => $(`#msg-${n}`, ctx.root)?.classList.add("in-range"));
   }
-  if (ctx.player) ctx.player.setMarks({ evidence: row ? row.evidence || [] : [], range, focus: null });
+  if (ctx.player) ctx.player.setMarks({ evidence, range, focus: null });
   if (!row || !crit) { bar.hidden = true; bar.innerHTML = ""; return; }
-  const ev = (row.evidence || []).length;
+  const ev = evidence.length;
   bar.hidden = false;
   bar.innerHTML = `
     <span class="cv-tr-ctx-dot" aria-hidden="true"></span>
     <span class="cv-tr-ctx-text">${ev ? `Подсвечено ${ev} ${plural(ev, "доказательство", "доказательства", "доказательств")}` : "Подсвечен проверенный участок"} по критерию
-      <b>${crit.code ? esc(crit.code) + " " : ""}${esc(crit.title)}</b>${range.length ? ` · участок #${range[0]}–#${range[range.length - 1]}` : ""}</span>
-    <button type="button" class="cv-x" data-clear aria-label="Снять подсветку">✕</button>`;
+      <b>${crit.code ? esc(crit.code) + " " : ""}${esc(crit.title)}</b>${range.length ? `, участок #${range[0]}–#${range[range.length - 1]}` : ""}</span>
+    <button type="button" class="cv-x" data-clear aria-label="Снять подсветку">${cvIcon("close")}</button>`;
 }
 
 // ------------------------------------------------------------ evaluation ----
+
+function checklistOptions() {
+  // Version first: it is what differs between options and must survive truncation on phones.
+  return ctx.checklists.map((c) => `<option value="${c.id}" ${c.id === ctx.checklistId ? "selected" : ""}>v${c.version} · ${esc(c.name)}${c.is_active ? " · активный" : ""}</option>`).join("");
+}
+
+/** Header control: shown once the dialog has at least one evaluation (re-evaluate with any checklist version). */
+function paintHeadCtl(show) {
+  const host = $("#cv-eval-ctl", ctx.root);
+  if (!host) return;
+  host.innerHTML = show ? `
+    <label class="cv-sr" for="sel-checklist">Чек-лист для новой оценки</label>
+    <select class="input" id="sel-checklist" data-sel-checklist>${checklistOptions()}</select>
+    <button class="btn" id="btn-eval" type="button" data-run-eval>${cvIcon("sparkle")}Оценить заново</button>` : "";
+}
+
+function paintHeadScore(ev) {
+  const host = $("#cv-head-score", ctx.root);
+  if (!host) return;
+  if (!ev || ev.status !== "done") { host.innerHTML = ""; return; }
+  const revised = ev.total !== null && ev.final_total !== null && Math.abs(Number(ev.total) - Number(ev.final_total)) > 0.001;
+  host.innerHTML = scoreBadgeHtml(ev.final_score ? ev.final_score.total : ev.final_total, { revised });
+}
 
 function panelHead(ev) {
   const hist = ctx.conv.evaluations;
@@ -246,20 +311,47 @@ function panelHead(ev) {
 
 function drawEmpty() {
   stopLoading();
+  paintHeadCtl(false);
+  paintHeadScore(null);
+  $("#cv-grid", ctx.root).classList.add("is-empty");
+  const n = ctx.conv.transcript.length;
   $("#eval-panel", ctx.root).innerHTML = `${panelHead(null)}
-    <div class="cv-empty">
-      <div class="cv-empty-ic" aria-hidden="true">✓</div>
-      <b>Диалог ещё не оценён</b>
-      <span>Выберите чек-лист вверху и нажмите «Оценить» — модель проверит диалог по каждому критерию и объяснит решение со ссылками на реплики.</span>
+    <div class="cv-cta">
+      <span class="cv-cta-ic" aria-hidden="true">${cvIcon("list")}</span>
+      <h3 class="cv-cta-title">Диалог ещё не оценён</h3>
+      <p class="cv-cta-text">Модель проверит ${n} ${plural(n, "реплику", "реплики", "реплик")} по каждому критерию чек-листа, поставит баллы и объяснит решения ссылками на реплики. Обычно это занимает 10–30 секунд.</p>
+      <label class="field cv-cta-field" for="sel-checklist-cta">Чек-лист
+        <select class="input" id="sel-checklist-cta" data-sel-checklist>${checklistOptions()}</select></label>
+      <button class="btn btn-primary cv-cta-btn" id="btn-eval-cta" type="button" data-run-eval>${cvIcon("sparkle")}Оценить диалог</button>
+      <div class="cv-cta-preview" id="cv-cta-preview"></div>
     </div>`;
   bindHistory();
+  paintPreview();
+}
+
+/** Criteria of the selected checklist, so it is clear what exactly will be checked. */
+async function paintPreview() {
+  const box = $("#cv-cta-preview", ctx.root);
+  if (!box || !ctx.checklistId) return;
+  const id = ctx.checklistId;
+  const owner = ctx;
+  let cl = ctx.clCache.get(id);
+  if (!cl) {
+    try { cl = await api.checklist(id); owner.clCache.set(id, cl); } catch { return; }
+  }
+  if (ctx !== owner || ctx.checklistId !== id || !box.isConnected) return;
+  const crits = (cl.config || cl).criteria || [];
+  if (!crits.length) { box.innerHTML = ""; return; }
+  box.innerHTML = `<div class="cv-cta-sub">Что проверим · ${crits.length} ${plural(crits.length, "критерий", "критерия", "критериев")}</div>
+    <ul class="cv-cta-crits">${crits.map((c) => `<li><span class="cv-code">${esc(c.code || "")}</span><span>${esc(c.title)}${c.type === "critical" ? ` <span class="cv-tag is-warn">без баллов</span>` : ""}</span></li>`).join("")}</ul>`;
 }
 
 function startLoading(ev) {
   stopLoading();
-  const kid = Number($("#sel-checklist", ctx.root).value);
-  const cl = ctx.checklists.find((c) => c.id === kid);
+  const cl = ctx.checklists.find((c) => c.id === ctx.checklistId);
   const crits = ev?.checklist?.criteria?.length || cl?.criteria_count || 0;
+  $("#cv-grid", ctx.root).classList.remove("is-empty");
+  paintHeadScore(null);
   $("#eval-panel", ctx.root).innerHTML = panelHead(ev) + loadingHtml({ messages: ctx.conv.transcript.length, criteria: crits });
   bindHistory();
   const t0 = ev && ev.created_at ? Math.min(Date.now(), Date.parse(ev.created_at)) : Date.now();
@@ -274,10 +366,12 @@ function stopLoading() {
 }
 
 async function runEvaluation(btn) {
-  const kid = Number($("#sel-checklist", ctx.root).value);
-  const sel = $("#sel-checklist", ctx.root);
-  busy(btn, true, "Оценка…");
-  sel.disabled = true;
+  const kid = ctx.checklistId;
+  if (!kid) { toast("Нет чек-листа для оценки", true); return; }
+  const headBtn = $("#btn-eval", ctx.root);
+  const sels = $$("[data-sel-checklist]", ctx.root);
+  busy(headBtn || btn, true, "Оценка…");
+  sels.forEach((s) => (s.disabled = true));
   startLoading(null);
   const mine = ctx;
   try {
@@ -294,7 +388,11 @@ async function runEvaluation(btn) {
     toast(e.message, true);
     if (ctx.evaluation) drawEvaluation(ctx.evaluation); else drawEmpty();
   } finally {
-    if (ctx === mine) { busy(btn, false); sel.disabled = false; }
+    if (ctx === mine) {
+      const hb = $("#btn-eval", ctx.root);
+      if (hb) busy(hb, false);
+      $$("[data-sel-checklist]", ctx.root).forEach((s) => (s.disabled = false));
+    }
   }
 }
 
@@ -307,9 +405,17 @@ async function loadEvaluation(id) {
 }
 
 function drawEvaluation(ev) {
+  // Re-evaluation defaults to the checklist version of the evaluation on screen.
+  if (ev.checklist_id && ctx.checklists.some((c) => c.id === ev.checklist_id) && ctx.checklistId !== ev.checklist_id) {
+    ctx.checklistId = ev.checklist_id;
+    $$("[data-sel-checklist]", ctx.root).forEach((sel) => { if (!sel.disabled) sel.value = String(ev.checklist_id); });
+  }
   ctx.evaluation = ev;
   clearTimeout(ctx.pollTimer);
   const panel = $("#eval-panel", ctx.root);
+  $("#cv-grid", ctx.root).classList.remove("is-empty");
+  if (!$("#btn-eval", ctx.root)) paintHeadCtl(true);
+  paintHeadScore(ev);
 
   if (ev.status !== "done") {
     if (ev.status === "running" || ev.status === "pending") {
@@ -318,8 +424,8 @@ function drawEvaluation(ev) {
     } else {
       stopLoading();
       panel.innerHTML = panelHead(ev) + `<div class="cv-pad">
-        <div class="cv-note cv-note-warn"><b>Ошибка оценки:</b> ${esc(ev.error || "неизвестная ошибка")}</div>
-        <p class="cv-muted-s">Нажмите «Оценить», чтобы повторить.</p></div>`;
+        <div class="cv-note cv-note-warn">${cvIcon("alert")}<span><b>Оценка не получилась:</b> ${esc(ev.error || "неизвестная ошибка")}</span></div>
+        <button class="btn btn-primary" type="button" data-run-eval>${cvIcon("sparkle")}Повторить оценку</button></div>`;
       bindHistory();
     }
     markEvidence(null);
@@ -355,11 +461,11 @@ function drawEvaluation(ev) {
 
   const critical = score.critical
     ? `<div class="cv-banner is-crit" role="alert">
-        <span class="cv-banner-ic" aria-hidden="true">!</span>
+        <span class="cv-banner-ic" aria-hidden="true">${cvIcon("alert")}</span>
         <div><b>Грубая ошибка</b> — отмечается отдельно от балла
           <div class="cv-banner-list">${score.critical_criteria.map((id) => `<button type="button" class="cv-link" data-open="${esc(id)}">${esc(critCfg[id]?.title || id)}</button>`).join(", ")}</div></div>
       </div>`
-    : `<div class="cv-banner is-ok"><span class="cv-banner-ic" aria-hidden="true">✓</span>Грубых ошибок не выявлено</div>`;
+    : `<div class="cv-banner is-ok"><span class="cv-banner-ic" aria-hidden="true">${cvIcon("shield")}</span>Грубых ошибок не выявлено</div>`;
 
   panel.innerHTML = panelHead(ev) + `
     <div class="cv-score">
@@ -368,14 +474,14 @@ function drawEvaluation(ev) {
         <div class="cv-score-cap">${totalChanged ? "Итог после пересмотра" : "Итоговая оценка"}</div>
         ${totalChanged ? `
           <div class="cv-revised">
-            <span class="cv-revised-was" title="Исходная оценка модели">${fmtNum(ev.total)}</span>
-            <span aria-hidden="true">→</span>
-            <b>${fmtNum(ev.final_total)}</b>
+            <span class="cv-revised-was"><small>Модель</small><s>${fmtNum(ev.total)}</s></span>
+            ${cvIcon("arrowRight", { cls: "cv-revised-arrow" })}
+            <span class="cv-revised-now"><small>Итог</small><b>${fmtNum(ev.final_total)}</b></span>
             <span class="cv-delta ${delta > 0 ? "is-up" : "is-down"}">${delta > 0 ? "+" : "−"}${fmtNum(Math.abs(delta))}</span>
           </div>
-          <div class="cv-muted-s">Исходная оценка модели: ${fmtNum(ev.total)} · решений по апелляциям: ${resolved}</div>`
+          <div class="cv-muted-s">Исходная оценка модели ${fmtNum(ev.total)}, решений по апелляциям: ${resolved}</div>`
         : resolved ? `<div class="cv-muted-s">Апелляции рассмотрены (${resolved}), итог не изменился</div>` : ""}
-        ${openApp ? `<div class="cv-muted-s"><span class="cv-tag is-warn">${openApp} ${plural(openApp, "апелляция", "апелляции", "апелляций")} на рассмотрении</span></div>` : ""}
+        ${openApp ? `<div><span class="cv-tag is-warn">${cvIcon("hourglass")}${openApp} ${plural(openApp, "апелляция", "апелляции", "апелляций")} на рассмотрении</span></div>` : ""}
         ${score.total === null ? `<div class="cv-note cv-note-na">Итог не рассчитывается: нет применимых критериев с весом.</div>` : ""}
         <div class="cv-secs">
           ${(score.sections || []).filter((s) => s.max_points !== null).map((s) => {
@@ -386,16 +492,20 @@ function drawEvaluation(ev) {
         </div>
       </div>
     </div>
+    ${ev.summary ? `<div class="cv-summary${ev.summary.length > 240 ? " is-clamped" : ""}">
+      <h3 class="cv-summary-h">Резюме модели</h3>
+      <p class="cv-summary-t" id="cv-summary-t">${esc(ev.summary)}</p>
+      ${ev.summary.length > 240 ? `<button type="button" class="cv-more" data-sum-more aria-expanded="false" aria-controls="cv-summary-t">Читать полностью</button>` : ""}
+    </div>` : ""}
     ${critical}
     <div id="cv-why">${lossesHtml({ ev, critCfg, scoreRows, appealsBy, expanded: ctx.whyExpanded })}</div>
-    ${ev.summary ? `<div class="cv-summary"><span class="cv-summary-h">Резюме модели</span>${esc(ev.summary)}</div>` : ""}
     <div class="cv-crits" id="crit-list">
-      <div class="cv-crits-h"><h3>Критерии</h3><span class="cv-muted-s">нажмите, чтобы увидеть объяснение и реплики</span></div>
+      <div class="cv-crits-h"><h3>Все критерии</h3><span class="cv-muted-s">откройте критерий, чтобы увидеть объяснение и реплики</span></div>
       ${groups.map((g) => {
         const ss = secScore[g.id];
         return `<div class="cv-group">
           <div class="cv-group-h"><span>${esc(sectionTitle[g.id] || ss?.title || "")}</span>
-            ${ss ? `<span>${ss.max_points !== null ? `${fmtNum(ss.points)} / ${fmtNum(ss.max_points)}` : g.items.every((c) => rowsBy[c.id].answer === "na") ? "все N/A — вес перераспределён" : "без баллов"}</span>` : ""}</div>
+            ${ss ? `<span>${ss.max_points !== null ? `${fmtNum(ss.points)} / ${fmtNum(ss.max_points)}` : g.items.every((c) => rowsBy[c.id].answer === "na") ? "все N/A, вес перераспределён" : "без баллов"}</span>` : ""}</div>
           ${g.items.map((c) => critHtml({
             row: rowsBy[c.id], crit: c, srow: scoreRows[c.id], orow: origRows[c.id], appeals: appealsBy[c.id] || [],
             msgs: ctx.conv.transcript, rel: ctx.rel, canAppeal: true, open: ctx.openCrit === c.id,
@@ -411,7 +521,7 @@ function drawEvaluation(ev) {
     toggleCrit(ctx.openCrit, true);
     // Deep link (e.g. from an appeal): bring the opened criterion and its reviewer note into view.
     const el = $(`.cv-crit[data-crit="${CSS.escape(ctx.openCrit)}"]`, ctx.root);
-    if (el) requestAnimationFrame(() => el.scrollIntoView({ block: "nearest", behavior: "smooth" }));
+    if (el) requestAnimationFrame(() => el.scrollIntoView({ block: "nearest", behavior: scrollBehavior() }));
   }
   else markEvidence(null);
 }
@@ -428,7 +538,15 @@ function onPanelClick(e) {
   if (open) {
     toggleCrit(open.dataset.open, true);
     const el = $(`.cv-crit[data-crit="${CSS.escape(open.dataset.open)}"]`, ctx.root);
-    if (el) el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    if (el) el.scrollIntoView({ block: "nearest", behavior: scrollBehavior() });
+    return;
+  }
+  const sm = t.closest("[data-sum-more]");
+  if (sm) {
+    const box = sm.closest(".cv-summary");
+    const open = box.classList.toggle("is-clamped") === false;
+    sm.setAttribute("aria-expanded", String(open));
+    sm.textContent = open ? "Свернуть" : "Читать полностью";
     return;
   }
   if (t.closest("[data-more]")) {
@@ -498,18 +616,18 @@ function appealDialog(critId) {
   const av = answerView(crit, row.answer);
   modal({
     title: `Оспорить оценку: ${crit.code ? crit.code + " " : ""}${crit.title}`,
-    submitText: "Подать апелляцию",
+    submitText: "Отправить апелляцию",
     body: `
       <div class="cv-ap-cur">
-        <span class="cv-ic cv-k-${row.answer === "na" ? "na" : av.kind}" aria-hidden="true">${esc(row.answer === "na" ? "N/A" : av.icon)}</span>
-        <div><b>Текущая оценка: ${esc(av.label)}</b>${srow && srow.points !== null && srow.points !== undefined ? ` · ${fmtNum(srow.points)} / ${fmtNum(srow.max_points)} балл.` : ""}
+        ${icHtml(crit, row.answer)}
+        <div><b>Сейчас: ${esc(av.label)}</b>${srow && srow.points !== null && srow.points !== undefined ? `, ${fmtNum(srow.points)} из ${fmtNum(srow.max_points)} балл.` : ""}
           <div class="cv-muted-s">${esc(row.explanation || "")}</div></div>
       </div>
-      <label class="field">Комментарий — почему оценка неверна
+      <label class="field">Почему оценка неверна
         <textarea class="input" id="ap-comment" rows="4" placeholder="Например: оператор представился в реплике #3, приветствие было на казахском"></textarea></label>
       <label class="field">Автор (необязательно)
         <input class="input" id="ap-author" placeholder="Оператор / супервайзер" value="${esc(window.CQA_USER || "")}" ${window.CQA_USER ? "readonly" : ""}></label>
-      <div class="cv-muted-s">Проверяющий увидит комментарий, объяснение модели и фрагмент диалога, затем подтвердит или изменит оценку.</div>`,
+      <div class="cv-muted-s">Проверяющий увидит ваш комментарий, объяснение модели и фрагмент диалога, затем подтвердит или изменит оценку. Итог пересчитается автоматически.</div>`,
     onSubmit: async (el) => {
       const comment = $("#ap-comment", el).value.trim();
       if (!comment) throw new Error("Добавьте комментарий");

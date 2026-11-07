@@ -105,21 +105,50 @@ export function toast(msg, isErr = false) {
 }
 
 /** Simple modal. `body` is HTML. Returns {el, close}. onSubmit(el) may return false to keep open. */
+let modalSeq = 0;
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
 export function modal({ title, body, submitText = "Сохранить", onSubmit, cancelText = "Отмена" }) {
+  const opener = document.activeElement;
+  const hid = `modal-h-${++modalSeq}`;
   const back = document.createElement("div");
   back.className = "modal-back";
   back.innerHTML = `
-    <div class="modal" role="dialog" aria-modal="true">
-      <div class="modal-head"><h3>${esc(title)}</h3><button class="btn btn-ghost btn-sm" data-x aria-label="Закрыть">✕</button></div>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="${hid}" tabindex="-1">
+      <div class="modal-head"><h3 id="${hid}">${esc(title)}</h3><button class="btn btn-ghost btn-sm btn-icon" type="button" data-x aria-label="Закрыть">${icon("x")}</button></div>
       <div class="modal-body">${body}</div>
       <div class="modal-foot">
-        <button class="btn" data-x>${esc(cancelText)}</button>
-        ${onSubmit ? `<button class="btn btn-primary" data-ok>${esc(submitText)}</button>` : ""}
+        <button class="btn" type="button" data-x>${esc(cancelText)}</button>
+        ${onSubmit ? `<button class="btn btn-primary" type="button" data-ok>${esc(submitText)}</button>` : ""}
       </div>
     </div>`;
-  const close = () => { back.remove(); document.removeEventListener("keydown", onKey); };
-  const onKey = (e) => { if (e.key === "Escape") close(); };
-  document.addEventListener("keydown", onKey);
+  const box = back.querySelector(".modal");
+  const isTop = () => { const all = document.querySelectorAll(".modal-back"); return all[all.length - 1] === back; };
+  let closed = false;
+  const close = () => {
+    if (closed) return;
+    closed = true;
+    back.remove();
+    document.removeEventListener("keydown", onKey, true);
+    // Return focus to whatever opened the dialog (if it is still on the page).
+    if (opener && opener.isConnected && typeof opener.focus === "function" && !document.querySelector(".modal-back")) {
+      opener.focus({ preventScroll: true });
+    }
+  };
+  const onKey = (e) => {
+    if (!isTop()) return;
+    if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(); return; }
+    if (e.key === "Tab") {
+      // Keep keyboard focus inside the dialog.
+      const items = [...box.querySelectorAll(FOCUSABLE)].filter((el) => el.offsetParent !== null || el === document.activeElement);
+      if (!items.length) { e.preventDefault(); box.focus(); return; }
+      const first = items[0], last = items[items.length - 1];
+      if (!box.contains(document.activeElement)) { e.preventDefault(); (e.shiftKey ? last : first).focus(); }
+      else if (e.shiftKey && (document.activeElement === first || document.activeElement === box)) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+  };
+  document.addEventListener("keydown", onKey, true);
   back.addEventListener("click", (e) => { if (e.target === back || e.target.closest("[data-x]")) close(); });
   const ok = back.querySelector("[data-ok]");
   if (ok) {
@@ -136,8 +165,8 @@ export function modal({ title, body, submitText = "Сохранить", onSubmit
     });
   }
   document.body.appendChild(back);
-  const first = back.querySelector("textarea, input, select");
-  if (first) first.focus();
+  const first = back.querySelector(".modal-body textarea, .modal-body input:not([type=hidden]):not([type=file]), .modal-body select");
+  if (first) first.focus(); else (ok || box).focus();
   return { el: back, close };
 }
 
@@ -214,6 +243,15 @@ const ICONS = {
   bulb: '<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/>',
   inbox: '<path d="M4 13h4l2 3h4l2-3h4M5 5h14l1 8v6H4v-6z"/>',
   filter: '<path d="M4 5h16l-6 8v6l-4-2v-4z"/>',
+  sort: '<path d="m8 9 4-4 4 4M8 15l4 4 4-4"/>',
+  route: '<circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><path d="M8.5 18H15a3.5 3.5 0 0 0 0-7H9a3.5 3.5 0 0 1 0-7h6.5"/>',
+  edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13.5 6.5 4 4"/>',
+  target: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r=".8"/>',
+  settings: '<circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/>',
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.5v.01"/>',
+  shield: '<path d="M12 3 5 6v5c0 4.5 3 8.3 7 10 4-1.7 7-5.5 7-10V6z"/><path d="m9 12 2 2 4-4"/>',
+  arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>',
+  logout: '<path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 8l-4 4 4 4M6 12h10"/>',
 };
 export function icon(name) {
   return `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">${ICONS[name] || ""}</svg>`;

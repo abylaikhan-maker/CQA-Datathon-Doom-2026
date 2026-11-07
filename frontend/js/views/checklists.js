@@ -8,6 +8,8 @@ let draft = null;            // config being edited
 let base = null;             // config of the version being edited (null for a new checklist)
 let openSet = new Set();     // expanded criterion objects
 let newSet = new Set();      // criteria added in this editing session
+let settingsOpen = false;    // «Настройки чек-листа» disclosure state (survives re-renders)
+let showErrs = false;        // validation messages appear only after an edit or a save attempt
 
 const TYPE_SHORT = { binary: "Да / Нет", scale: "Шкала", critical: "Грубая ошибка" };
 const FIELD = {
@@ -40,12 +42,14 @@ export async function render(root, params) {
   base = current.id ? structuredClone(current.config) : null;
   openSet = new Set();
   newSet = new Set();
+  settingsOpen = !current.id; // a new checklist starts with its name and sections visible
+  showErrs = false;
   const meta = list.find((c) => c.id === current.id);
 
   root.innerHTML = `<div class="cl-page">
     <div class="page-head">
       <div><h1>Чек-листы</h1>
-        <div class="sub">Каждое сохранение создаёт новую версию. Старые оценки остаются привязаны к своей версии.</div></div>
+        <div class="sub">Измените критерий, сохраните новую версию и примените её к набору диалогов. Старые оценки остаются привязаны к своей версии.</div></div>
       <div class="spacer"></div>
       <div class="page-actions"><a class="btn" href="#/checklists/new" data-nav-guard>${icon("plus")}Новый чек-лист</a></div>
     </div>
@@ -56,7 +60,7 @@ export async function render(root, params) {
           ${list.map((c) => `
             <button type="button" class="cl-item ${c.id === current.id ? "sel" : ""}" data-id="${c.id}" ${c.id === current.id ? 'aria-current="true"' : ""}>
               <span class="t"><b>${esc(c.name)}</b><span class="ver">v${esc(c.version)}</span>${c.is_active ? `<span class="badge yes">активный</span>` : ""}</span>
-              <span class="meta" style="display:block">${c.criteria_count} ${plural(c.criteria_count, ["критерий", "критерия", "критериев"])} · ${c.evaluations} ${plural(c.evaluations, ["оценка", "оценки", "оценок"])} · ${esc(fmtDate(c.created_at))}</span>
+              <span class="meta meta-list"><span>${c.criteria_count} ${plural(c.criteria_count, ["критерий", "критерия", "критериев"])}</span><span>${c.evaluations} ${plural(c.evaluations, ["оценка", "оценки", "оценок"])}</span><span>${esc(fmtDate(c.created_at))}</span></span>
               ${c.note ? `<span class="cl-note" style="display:-webkit-box">${esc(c.note)}</span>` : ""}
             </button>`).join("") || `<div class="empty">Нет чек-листов</div>`}
         </div>
@@ -64,9 +68,9 @@ export async function render(root, params) {
       <section class="card cl-editor" aria-label="Редактор чек-листа">
         <div class="card-head">
           <div class="ed-head-main">
-            <h2>${current.id ? `${esc(current.config.name)} <span class="muted">· v${esc(current.version)}</span>` : "Новый чек-лист"}
+            <h2>${current.id ? `${esc(current.config.name)} <span class="muted">v${esc(current.version)}</span>` : "Новый чек-лист"}
               ${current.is_active ? `<span class="badge yes">${icon("check")}активный</span>` : ""}</h2>
-            ${current.id ? `<div class="muted small">${meta ? `создан ${esc(fmtDate(meta.created_at))} · ${meta.evaluations} ${plural(meta.evaluations, ["оценка", "оценки", "оценок"])}` : ""}${current.note ? ` · «${esc(current.note)}»` : ""}</div>` : `<div class="muted small">Заполните параметры и добавьте критерии</div>`}
+            ${current.id ? `<div class="muted small meta-list">${meta ? `<span>создан ${esc(fmtDate(meta.created_at))}</span><span>${meta.evaluations} ${plural(meta.evaluations, ["оценка", "оценки", "оценок"])}</span>` : ""}${current.note ? `<span>«${esc(current.note)}»</span>` : ""}</div>` : `<div class="muted small">Заполните параметры и добавьте критерии</div>`}
           </div>
           <div class="ed-head-actions">
             ${current.id && !current.is_active ? `<button class="btn btn-sm" type="button" id="btn-activate">${icon("star")}Сделать активным</button>` : ""}
@@ -295,35 +299,46 @@ function isDirty() {
 function errSlot(key) { return `<small class="field-err" data-err="${esc(key)}" role="alert"></small>`; }
 
 function drawEditor(el, focusKey) {
+  const secUse = (id) => draft.criteria.filter((c) => c.section === id).length;
   el.innerHTML = `
-    <div class="ed-section-title">Общие параметры</div>
-    <div class="ed-general">
-      <label class="field span4">Название чек-листа<input class="input" data-k="name" value="${esc(draft.name)}">${errSlot("name")}</label>
-      <label class="field span2">Округление итога, знаков<input class="input" type="number" min="0" max="4" data-k="rounding" value="${esc(draft.rounding ?? 2)}"></label>
-      <label class="field span6">Описание<input class="input" data-k="description" value="${esc(draft.description || "")}" placeholder="Коротко: для чего этот чек-лист"></label>
-      <label class="field span6">Общие правила для оценщика <span class="hint">контекст, который получает модель вместе с критериями</span>
-        <textarea class="input" rows="3" data-k="general_rules">${esc(draft.general_rules || "")}</textarea></label>
-    </div>
-
-    <div class="ed-section-title">Распределение весов <span class="muted small">итог всегда нормируется к 100</span></div>
-    <div class="weights" id="weights"></div>
-
-    <div class="ed-section-title">Секции <span class="muted">(${draft.sections.length})</span></div>
-    <div>
-      ${draft.sections.map((s, i) => `
-        <div class="sec-ed">
-          <label class="field"><span class="sr-only">id секции ${i + 1}</span><input class="input mono" data-k="sections.${i}.id" value="${esc(s.id)}" placeholder="id">${errSlot(`sections.${i}.id`)}</label>
-          <label class="field"><span class="sr-only">Название секции ${i + 1}</span><input class="input" data-k="sections.${i}.title" value="${esc(s.title)}" placeholder="Название секции"></label>
-          <button class="btn btn-sm btn-ghost btn-danger btn-icon" type="button" data-act="del-section" data-i="${i}" aria-label="Удалить секцию ${esc(s.title || s.id)}" title="Удалить секцию">${icon("trash")}</button>
-        </div>`).join("")}
-      <button class="btn btn-sm" type="button" data-act="add-section">${icon("plus")}Секция</button>
-    </div>
+    <details class="ed-settings" id="ed-settings" ${settingsOpen ? "open" : ""}>
+      <summary>
+        <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+        <span class="ed-settings-t">Настройки чек-листа</span>
+        <span class="ed-settings-sub">название, общие правила для модели, ${draft.sections.length} ${plural(draft.sections.length, ["секция", "секции", "секций"])}</span>
+        <span class="err-dot" title="Есть ошибки"></span>
+      </summary>
+      <div class="ed-settings-body">
+        <div class="ed-general">
+          <label class="field span4">Название чек-листа<input class="input" data-k="name" value="${esc(draft.name)}">${errSlot("name")}</label>
+          <label class="field span2">Округление итога, знаков<input class="input" type="number" min="0" max="4" data-k="rounding" value="${esc(draft.rounding ?? 2)}"></label>
+          <label class="field span6">Описание<input class="input" data-k="description" value="${esc(draft.description || "")}" placeholder="Коротко: для чего этот чек-лист"></label>
+          <label class="field span6">Общие правила для оценщика <span class="hint">контекст, который модель получает вместе с критериями</span>
+            <textarea class="input" rows="4" data-k="general_rules">${esc(draft.general_rules || "")}</textarea></label>
+        </div>
+        <div class="ed-sub">Секции <span class="hint">группируют критерии в разборе и в итоге</span></div>
+        <div class="sec-list">
+          ${draft.sections.length ? `<div class="sec-head" aria-hidden="true"><span>Название</span><span>Код секции</span><span class="sec-n">Критериев</span><span></span></div>` : ""}
+          ${draft.sections.map((s, i) => `
+            <div class="sec-ed" data-si="${i}">
+              <label class="field"><span class="sr-only">Название секции ${i + 1}</span><input class="input" data-k="sections.${i}.title" value="${esc(s.title)}" placeholder="Название секции"></label>
+              <label class="field"><span class="sr-only">Код секции ${i + 1}</span><input class="input mono sec-id" data-k="sections.${i}.id" value="${esc(s.id)}" placeholder="id" spellcheck="false">${errSlot(`sections.${i}.id`)}</label>
+              <span class="sec-n num-t" title="Критериев в секции">${secUse(s.id)}</span>
+              <button class="btn btn-sm btn-ghost btn-danger btn-icon" type="button" data-act="del-section" data-i="${i}" aria-label="Удалить секцию ${esc(s.title || s.id)}" title="Удалить секцию">${icon("trash")}</button>
+            </div>`).join("")}
+          <div class="sec-foot"><button class="btn btn-sm" type="button" data-act="add-section">${icon("plus")}Добавить секцию</button>
+            <span class="hint">Код секции хранится в оценках — у существующих секций его лучше не менять.</span></div>
+        </div>
+      </div>
+    </details>
 
     <div class="ed-section-title">Критерии <span class="muted">(${draft.criteria.length})</span><span class="spacer"></span>
       ${draft.criteria.length ? `<button class="btn btn-sm btn-ghost" type="button" data-act="expand-all">${draft.criteria.every((c) => openSet.has(c)) ? "Свернуть все" : "Развернуть все"}</button>` : ""}</div>
+    <div class="weights" id="weights"></div>
     ${errSlot("criteria")}
-    <div id="crit-list">${draft.criteria.map((c, i) => critEditor(c, i)).join("")}</div>
+    <div id="crit-list">${draft.criteria.map((c, i) => critEditor(c, i)).join("") || `<div class="diff-empty">Критериев пока нет. Добавьте первый: название, тип ответа и вес.</div>`}</div>
     <button class="btn" type="button" data-act="add-crit">${icon("plus")}Добавить критерий</button>`;
+  $("#ed-settings", el).addEventListener("toggle", (e) => { settingsOpen = e.currentTarget.open; });
   paint(el);
   if (focusKey) {
     const f = el.querySelector(`[data-k="${CSS.escape(focusKey)}"]`);
@@ -355,9 +370,9 @@ function critEditor(c, i) {
         </div>
       </div>
       <div class="ed-crit-body" id="crit-body-${i}">
-        <label class="field">Код<input class="input" data-k="${k("code")}" value="${esc(c.code || "")}"></label>
-        <label class="field">ID<input class="input mono" data-k="${k("id")}" value="${esc(c.id)}">${errSlot(k("id"))}</label>
         <label class="field span4">Название<input class="input" data-k="${k("title")}" value="${esc(c.title)}" placeholder="Например: Установление контакта">${errSlot(k("title"))}</label>
+        <label class="field">Код<input class="input" data-k="${k("code")}" value="${esc(c.code || "")}"></label>
+        <label class="field">Идентификатор<input class="input mono" data-k="${k("id")}" value="${esc(c.id)}" spellcheck="false">${errSlot(k("id"))}</label>
         <label class="field span2">Секция
           <select class="input" data-k="${k("section")}">
             <option value="">—</option>
@@ -392,7 +407,7 @@ function critEditor(c, i) {
 
 /** Updates validation messages, criterion headers, weights and the save bar without re-rendering inputs. */
 function paint(el) {
-  const errs = validate();
+  const errs = showErrs ? validate() : {};
   $$("[data-err]", el).forEach((s) => { s.textContent = errs[s.dataset.err] || ""; });
   $$("[data-k]", el).forEach((inp) => {
     if (errs[inp.dataset.k]) inp.setAttribute("aria-invalid", "true"); else inp.removeAttribute("aria-invalid");
@@ -408,6 +423,13 @@ function paint(el) {
     $("[data-h=code]", card).textContent = c.code || "";
     $("[data-h=weight]", card).textContent = c.type === "critical" ? "без баллов" : `вес ${fmtNum(c.weight)} · ${fmtNum(share(c), 1)}%`;
   });
+  $$(".sec-ed", el).forEach((row) => {
+    const sec = draft.sections[Number(row.dataset.si)];
+    const n = $(".sec-n", row);
+    if (sec && n) n.textContent = draft.criteria.filter((c) => c.section === sec.id).length;
+  });
+  const set = $("#ed-settings", el);
+  if (set) set.classList.toggle("has-err", Object.keys(errs).some((k) => k === "name" || k.startsWith("sections.")));
   paintWeights(el);
   paintSaveBar(el, errs);
 }
@@ -422,7 +444,8 @@ function paintWeights(el) {
     <div class="w-top">
       <span>Сумма весов: <b class="num-t">${fmtNum(tw)}</b></span>
       ${tw === 100 ? `<span class="badge yes">${icon("check")}= 100</span>` : `<span class="badge warn">≠ 100</span>`}
-      <span class="muted">· с баллами: ${scoredCriteria().length}${crit ? ` · грубых ошибок (без баллов): ${crit}` : ""}</span>
+      <span class="muted">с баллами: ${scoredCriteria().length}</span>
+      ${crit ? `<span class="muted">грубых ошибок (без баллов): ${crit}</span>` : ""}
     </div>
     ${scored.length ? `<div class="weights-bar" role="img" aria-label="Доли весов: ${esc(scored.map((c) => `${c.code || c.id} — ${fmtNum(share(c), 1)}%`).join(", "))}">
       ${scored.map((c) => `<i style="flex:${Number(c.weight)}" title="${esc(`${c.code || c.id} ${c.title || ""}: вес ${fmtNum(c.weight)} → ${fmtNum(share(c), 1)}% итога`)}">${share(c) >= 5 ? esc(c.code || c.id) : ""}</i>`).join("")}
@@ -437,11 +460,22 @@ function paintSaveBar(el, errs) {
   const d = computeDiff(base, draft), n = diffCount(d);
   const parts = [];
   if (nErr) parts.push(`<span class="badge no">${icon("alert")}${nErr} ${plural(nErr, ["ошибка", "ошибки", "ошибок"])}</span><button class="btn-link small" type="button" data-act="show-err">показать</button>`);
-  if (base) parts.push(n ? `<span class="badge warn">${n} ${plural(n, ["изменение", "изменения", "изменений"])}</span>` : `<span class="muted">Изменений нет</span>`);
-  else parts.push(`<span class="muted">Новый чек-лист · ${draft.criteria.length} ${plural(draft.criteria.length, ["критерий", "критерия", "критериев"])}</span>`);
-  bar.innerHTML = `
-    <div class="status" aria-live="polite">${parts.join("")}</div>
-    <button class="btn btn-primary" type="button" data-act="save" ${base && !n ? 'disabled title="Нет изменений для сохранения"' : ""}>${icon("check")}Сохранить новую версию…</button>`;
+  if (base) parts.push(n ? `<span class="badge warn">${n} ${plural(n, ["изменение", "изменения", "изменений"])}</span><span class="muted sb-help">перед сохранением покажем, что изменилось</span>` : `<span class="muted">Изменений нет<span class="sb-help">. Откройте критерий и отредактируйте его — кнопка сохранения станет активной</span></span>`);
+  else parts.push(`<span class="muted">Новый чек-лист</span><span class="muted">${draft.criteria.length} ${plural(draft.criteria.length, ["критерий", "критерия", "критериев"])}</span>`);
+  // Update in place: a field's `change` fires on mousedown of the save button, and replacing the
+  // button at that moment swallowed the click (the first «Сохранить» click after typing did nothing).
+  if (!bar.querySelector("[data-act=save]")) {
+    bar.innerHTML = `
+      <div class="status" aria-live="polite"></div>
+      <button class="btn btn-primary" type="button" data-act="save">${icon("check")}Сохранить новую версию…</button>`;
+  }
+  const html = parts.join("");
+  const status = bar.querySelector(".status");
+  if (status.innerHTML !== html) status.innerHTML = html;
+  const btn = bar.querySelector("[data-act=save]");
+  const off = !!base && !n;
+  btn.disabled = off;
+  if (off) btn.title = "Нет изменений для сохранения"; else btn.removeAttribute("title");
 }
 
 function revealFirstError(el) {
@@ -449,6 +483,11 @@ function revealFirstError(el) {
   const key = Object.keys(errs)[0];
   if (!key) return;
   const m = key.match(/^criteria\.(\d+)\./);
+  if (key === "name" || key.startsWith("sections.")) {
+    settingsOpen = true;
+    const set = $("#ed-settings", el);
+    if (set) set.open = true;
+  }
   if (m) {
     const c = draft.criteria[Number(m[1])];
     if (c && !openSet.has(c)) { openSet.add(c); drawEditor(el); }
@@ -467,6 +506,7 @@ function setPath(obj, path, value) {
 function onInput(e, editor) {
   const t = e.target;
   if (!t.dataset.k || t.type === "checkbox" || t.tagName === "SELECT") return;
+  showErrs = true;
   let v = t.value;
   if (t.type === "number") v = v === "" ? (t.dataset.k.includes(".scale.") ? "" : 0) : Number(v);
   const k = t.dataset.k;
@@ -493,6 +533,7 @@ function syncSectionOptions(editor) {
 function onChange(e, editor) {
   const t = e.target;
   if (!t.dataset.k) return;
+  showErrs = true;
   const k = t.dataset.k;
   if (t.type === "checkbox" || t.tagName === "SELECT") {
     const v = t.type === "checkbox" ? t.checked : t.value;
@@ -598,6 +639,8 @@ function openSave(page, current, list) {
   const editor = $("#editor", page);
   const errs = validate();
   if (Object.keys(errs).length) {
+    showErrs = true;
+    paint(editor);
     toast(`Исправьте ошибки в чек-листе (${Object.keys(errs).length})`, true);
     revealFirstError(editor);
     return;
@@ -648,7 +691,7 @@ async function applyDialog(cl, { justSaved = false } = {}) {
   const name = cl.config?.name || "";
   const m = modal({
     title: justSaved ? `Версия v${cl.version} сохранена` : `Применить «${name} v${cl.version}»`,
-    submitText: "Запустить оценку",
+    submitText: "Оценить диалоги",
     cancelText: justSaved ? "Позже" : "Отмена",
     body: `
       ${justSaved ? `<div class="success-head">${icon("done")}<div><b>«${esc(name)}» v${esc(cl.version)}${cl.is_active ? " сохранён и активирован" : " сохранён"}.</b><br><span class="small">Примените версию к набору — диалоги будут оценены по новому чек-листу.</span></div></div>` : ""}
@@ -691,6 +734,8 @@ async function applyDialog(cl, { justSaved = false } = {}) {
       const rows = await api.conversations({ group: $("#ap-group", m.el).value || null, checklist_id: cl.id });
       if (my !== seq) return;
       const n = $("#ap-missing", m.el).checked ? rows.filter((r) => !r.eval_id || r.status === "error").length : rows.length;
+      const okBtn = $("[data-ok]", m.el);
+      if (okBtn && !okBtn.disabled) okBtn.textContent = n ? `Оценить ${n} ${plural(n, ["диалог", "диалога", "диалогов"])}` : "Оценить диалоги";
       est.innerHTML = `<dt>Будет оценено</dt><dd>${n} ${plural(n, ["диалог", "диалога", "диалогов"])}</dd>
         ${cost && n ? `<dt>Ориентировочная стоимость</dt><dd>≈ $${fmtNum(cost * n, 3)}</dd>` : ""}`;
     } catch { if (my === seq) est.innerHTML = ""; }

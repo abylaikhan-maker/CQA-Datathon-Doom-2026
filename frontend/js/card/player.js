@@ -3,6 +3,7 @@
 // The native <audio> element stays hidden; everything degrades gracefully when the
 // recording cannot be loaded (CORS / 404) — the timeline still navigates the transcript.
 import { esc, fmtClock, SPEAKER } from "../util.js";
+import { cvIcon } from "./icons.js";
 
 const LANES = [
   { key: "client", label: "Клиент" },
@@ -98,8 +99,8 @@ export function createPlayer(host, { audioUrl, sourceUrl, segments, onSegment, o
             <button type="button" data-mode="full" aria-pressed="true">Вся запись</button>
             <button type="button" data-mode="dialog" aria-pressed="false">Реплики</button>
           </div>
-          ${audioUrl ? `<button class="btn btn-sm btn-ghost cv-pl-rate" type="button" data-pl="rate" aria-label="Скорость воспроизведения">1×</button>
-          <a class="btn btn-sm" href="${esc(safeHref(sourceUrl || audioUrl))}" target="_blank" rel="noopener">Открыть в плеере ↗</a>` : ""}
+          ${audioUrl ? `<button class="btn btn-sm btn-ghost cv-pl-rate" type="button" data-pl="rate" aria-label="Скорость воспроизведения: 1×">1×</button>
+          <a class="btn btn-sm" href="${esc(safeHref(sourceUrl || audioUrl))}" target="_blank" rel="noopener">${cvIcon("external")}Открыть в плеере<span class="cv-sr"> (в новой вкладке)</span></a>` : ""}
         </div>
       </div>
       <div class="cv-tl">
@@ -239,6 +240,7 @@ export function createPlayer(host, { audioUrl, sourceUrl, segments, onSegment, o
     st.rate = (st.rate + 1) % RATES.length;
     audio.playbackRate = RATES[st.rate];
     el.rate.textContent = `${String(RATES[st.rate]).replace(".", ",")}×`;
+    el.rate.setAttribute("aria-label", `Скорость воспроизведения: ${el.rate.textContent}`);
   });
   on(el.zoom, "click", (e) => {
     const b = e.target.closest("[data-mode]");

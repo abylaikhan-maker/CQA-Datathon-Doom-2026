@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="16" viewBox="0 0 64 16">
+  <!-- Koshkar-muiz (ram's horn) running border: a horn pair, then the same pair turned over, as on tuskiiz edging. -->
+  <defs>
+    <g id="h" fill="none" stroke="#E6A532" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M16 13.2C15 8.6 12 5 8.4 5 5 5 3.4 8.2 5.2 10.4 6.8 12.3 10 11.7 10.1 9.4 10.2 7.8 8.6 7.1 7.6 7.9"/>
+      <path d="M16 13.2C17 8.6 20 5 23.6 5 27 5 28.6 8.2 26.8 10.4 25.2 12.3 22 11.7 21.9 9.4 21.8 7.8 23.4 7.1 24.4 7.9"/>
+      <path d="M16 2.6v4.6"/>
+    </g>
+  </defs>
+  <use href="#h"/>
+  <use href="#h" transform="rotate(180 32 8)"/>
+</svg>

@@ -2,19 +2,58 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0f3a2c">
   <title>CQA — оценка качества диалогов</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230f3a2c'/><path d='M9 17l5 5 9-11' stroke='%23b8e08a' stroke-width='3.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
+  <link rel="preload" href="static/fonts/GolosText-Variable.subset.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="static/css/app.css">
   <link rel="stylesheet" href="static/css/card.css">
   <link rel="stylesheet" href="static/css/accuracy.css">
+  <link rel="stylesheet" href="static/css/verify.css">
   <script>
     // API base. In Dynamics 365 set window.CQA_CONFIG = { apiBase: "https://cqa.example.com" } before app.js.
     window.CQA_CONFIG = window.CQA_CONFIG || { apiBase: "" };
+    // Design themes (frontend/themes/<name>/theme.css): pick with ?theme=<name>, remembered per browser;
+    // ?theme=base returns to the default look.
+    // Also accepts numbers: ?theme=0 (base) … ?theme=4, matching the switcher bar at the top of the page.
+    window.CQA_THEMES = ["base", "signal", "studio", "steppe", "pop", "business"];
+    (function () {
+      var THEMES = window.CQA_THEMES;
+      var q = new URLSearchParams(location.search).get("theme"), t = null;
+      if (q !== null && /^\d$/.test(q)) q = THEMES[+q] || "base";
+      try { t = q || localStorage.getItem("cqa.theme"); } catch (e) { t = q; }
+      if (q) { try { localStorage.setItem("cqa.theme", q); } catch (e) {} }
+      window.CQA_THEME = THEMES.indexOf(t) > 0 ? t : "base";
+      if (window.CQA_THEME === "base") return;
+      document.documentElement.setAttribute("data-theme", t);
+      document.write('<link rel="stylesheet" href="static/themes/' + t + '/theme.css">');
+    })();
   </script>
 </head>
 <body>
+  <!-- Design comparison switcher (temporary, for choosing a theme). -->
+  <nav id="theme-switch" aria-label="Выбор дизайна" style="position:relative;z-index:10000;display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:6px 12px;background:#111;color:#fff;font:600 13px/1.2 system-ui,sans-serif">
+    <span style="margin-right:6px;opacity:.8">Дизайн:</span>
+  </nav>
+  <script>
+    (function () {
+      var bar = document.getElementById("theme-switch");
+      var names = { base: "Текущий", signal: "Signal", studio: "Studio", steppe: "Steppe", pop: "Pop", business: "Business" };
+      window.CQA_THEMES.forEach(function (t, i) {
+        var a = document.createElement("a");
+        var on = t === window.CQA_THEME;
+        a.href = "?theme=" + i;
+        a.textContent = i + " · " + names[t];
+        a.setAttribute("aria-current", on ? "true" : "false");
+        a.style.cssText = "color:" + (on ? "#111" : "#fff") + ";background:" + (on ? "#ffe600" : "#2a2a2a") +
+          ";padding:5px 10px;border-radius:4px;text-decoration:none;min-height:28px;display:inline-flex;align-items:center";
+        // keep the current screen (hash) when switching
+        a.addEventListener("click", function (e) { e.preventDefault(); location.href = location.pathname + "?theme=" + i + location.hash; });
+        bar.appendChild(a);
+      });
+    })();
+  </script>
   <a class="skip-link" href="#view" id="skip-link">Перейти к содержимому</a>
   <div class="route-bar" id="route-bar" aria-hidden="true"></div>
   <div class="layout">
@@ -24,12 +63,11 @@
         <span class="brand-text"><b>CQA</b><small>Conversation Quality Analytics</small></span>
       </a>
       <nav aria-label="Разделы">
-        <div class="nav-label">Разделы</div>
-        <a href="#/conversations" data-nav="conversations"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H8l-4 4z"/></svg>Диалоги</a>
-        <a href="#/checklists" data-nav="checklists"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 12l3 3 5-6"/></svg>Чек-листы</a>
-        <a href="#/appeals" data-nav="appeals"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M5 7h14M5 7l-3 7h6zM19 7l-3 7h6zM8 21h8"/></svg>Апелляции<b class="nav-badge" id="appeals-badge" hidden></b></a>
-        <a href="#/analytics" data-nav="analytics"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V12M12 20V5M19 20v-9"/></svg>Аналитика</a>
-        <a href="#/accuracy" data-nav="accuracy"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="0.8"/></svg>Точность</a>
+        <a href="#/conversations" data-nav="conversations"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H8l-4 4z"/></svg><span class="nav-t">Диалоги</span></a>
+        <a href="#/checklists" data-nav="checklists"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 12l3 3 5-6"/></svg><span class="nav-t">Чек-листы</span></a>
+        <a href="#/appeals" data-nav="appeals"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M5 7h14M5 7l-3 7h6zM19 7l-3 7h6zM8 21h8"/></svg><span class="nav-t">Апелляции</span><b class="nav-badge" id="appeals-badge" hidden></b></a>
+        <a href="#/analytics" data-nav="analytics"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V12M12 20V5M19 20v-9"/></svg><span class="nav-t">Аналитика</span></a>
+        <a href="#/accuracy" data-nav="accuracy"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="0.8"/></svg><span class="nav-t">Точность</span></a>
       </nav>
       <div class="sidebar-foot" id="meta-info"></div>
     </aside>

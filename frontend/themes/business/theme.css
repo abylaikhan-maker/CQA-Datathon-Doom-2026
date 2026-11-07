@@ -1,0 +1,1098 @@
+/* =====================================================================
+   CQA theme «business» — calm, neutral, information-first.
+   White canvas, grey chrome, hairlines instead of shadows, near-black
+   primary actions, one green accent (#0F7B4F) for selection, links and
+   focus only. Status colours appear as text, small dots and very light
+   badge tints. The single highlighter is the evidence mark (#FEF9C3).
+   CSS only, every rule scoped to html[data-theme="business"].
+
+   Font: Inter (The Inter Project Authors, SIL OFL 1.1, fonts/Inter-OFL.txt),
+   variable opsz 14–32 / wght 400–600, subset to Latin + full Cyrillic
+   incl. Kazakh (ә ғ қ ң ө ұ ү һ і) and ₸.
+   ===================================================================== */
+
+@font-face {
+  font-family: "Inter CQA";
+  src: url("fonts/Inter-Variable.subset.woff2") format("woff2");
+  font-weight: 400 600; font-style: normal; font-display: swap;
+}
+
+/* ---------- tokens ---------- */
+html[data-theme="business"] {
+  --bz-chrome: #F7F8FA;      /* sidebar, page-level chrome */
+  --bz-fill: #F3F4F6;        /* subtle fill */
+  --bz-head: #F9FAFB;        /* table header, row hover */
+  --bz-accent: #0F7B4F;      /* selection, links, focus */
+  --bz-accent-ink: #0B5E3C;  /* accent text on accent tint */
+  --bz-accent-tint: #EEF6F2; /* selected chip background */
+  --bz-chart: #4B5563;       /* single neutral data series */
+  --bz-chart-hover: #111827;
+  --bz-track: #E5E7EB;       /* bar tracks */
+  --bz-shadow: 0 8px 24px rgba(17, 24, 39, .08);
+
+  --brand-950: #111827;
+  --brand-900: #111827;
+  --brand-800: #0B5E3C;
+  --brand-700: #0F7B4F;
+  --brand-600: #0F7B4F;
+  --brand-500: #3F8F6B;
+  --brand-300: #D1D5DB;
+  --brand-200: #E5E7EB;
+  --brand-100: #F3F4F6;
+  --brand-50: #F9FAFB;
+  --lime: #0F7B4F;
+  --lime-strong: #0F7B4F;
+  --bg: #FFFFFF;
+  --surface: #FFFFFF;
+  --surface-2: #F9FAFB;
+  --line: #E5E7EB;
+  --line-strong: #D1D5DB;
+  --ink: #111827;
+  --ink-2: #4B5563;
+  --ink-3: #6B7280;
+  --ink-disabled: #6B7280;
+  --good: #15803D;
+  --good-bg: #F0FDF4;
+  --bad: #B91C1C;
+  --bad-bg: #FEF2F2;
+  --warn: #B45309;
+  --warn-bg: #FFFBEB;
+  --na: #6B7280;
+  --na-bg: #F3F4F6;
+  --na-mark: #D1D5DB;
+  --hl: #FEF9C3;
+  --hl-line: #CA8A04;
+  --radius: 8px;
+  --radius-lg: 8px;
+  --shadow: none;
+  --shadow-lg: var(--bz-shadow);
+  --focus: 0 0 0 2px #fff, 0 0 0 4px #0F7B4F;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --sidebar-w: 232px;
+  --font: "Inter CQA", "Inter", "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
+
+  /* card.css tokens */
+  --cv-client: #4B5563;
+  --cv-client-bg: #F3F4F6;
+  --cv-client-line: #F3F4F6;
+  --cv-op-bg: #FFFFFF;
+  --cv-op-line: #E5E7EB;
+  --cv-wave-client: #D1D5DB;
+  --cv-wave-op: #D1D5DB;
+  --cv-wave-other: #E5E7EB;
+}
+
+html:where([data-theme="business"]) body {
+  background: #fff; color: #111827; font-family: var(--font); font-size: 14px; line-height: 1.5;
+  font-optical-sizing: auto; letter-spacing: -.003em;
+}
+html:where([data-theme="business"]) h1,
+html:where([data-theme="business"]) h2,
+html:where([data-theme="business"]) h3 { font-weight: 600; letter-spacing: -.011em; }
+html:where([data-theme="business"]) b,
+html:where([data-theme="business"]) strong { font-weight: 600; }
+html:where([data-theme="business"]) a { color: var(--bz-accent); }
+html:where([data-theme="business"]) .num-t,
+html:where([data-theme="business"]) .num,
+html:where([data-theme="business"]) .kpi .v { font-variant-numeric: tabular-nums; }
+html:where([data-theme="business"]) ::selection { background: #DCEFE5; }
+html:where([data-theme="business"]) .skip-link { color: #111827; border: 1px solid var(--line); border-radius: 6px; }
+
+/* Motion: colour/background transitions only. */
+html:where([data-theme="business"]) .view-enter { animation: none; }
+html:where([data-theme="business"]) .route-bar { height: 2px; background: #111827; }
+
+/* ---------- shell: sidebar ---------- */
+html:where([data-theme="business"]) .sidebar {
+  background: var(--bz-chrome); color: #4B5563; border-right: 1px solid var(--line);
+  padding: 18px 12px 14px; gap: 20px;
+}
+html:where([data-theme="business"]) .brand { color: #111827; padding: 2px 10px; border-radius: 6px; gap: 0; }
+html:where([data-theme="business"]) .brand-mark { display: none; }
+html:where([data-theme="business"]) .brand-text { line-height: 1.25; }
+html:where([data-theme="business"]) .brand-text b { font-size: 15px; font-weight: 600; letter-spacing: 0; }
+html:where([data-theme="business"]) .brand-text small { font-size: 12px; font-weight: 400; color: #6B7280; margin-top: 1px; }
+html:where([data-theme="business"]) .sidebar nav { gap: 2px; }
+html:where([data-theme="business"]) .sidebar nav a {
+  gap: 10px; padding: 6px 10px; min-height: 34px; border-radius: 6px; color: #4B5563; font-weight: 500; font-size: 14px;
+  transition: background-color .15s, color .15s;
+}
+html:where([data-theme="business"]) .sidebar nav a svg { width: 16px; height: 16px; stroke-width: 1.8; color: #6B7280; }
+html:where([data-theme="business"]) .sidebar nav a:hover { background: #EDEEF1; color: #111827; }
+html:where([data-theme="business"]) .sidebar nav a.active {
+  background: #fff; color: #111827; box-shadow: inset 0 0 0 1px var(--line);
+}
+html:where([data-theme="business"]) .sidebar nav a.active svg { color: #111827; }
+html:where([data-theme="business"]) .sidebar nav a.active::before {
+  left: 0; top: 8px; bottom: 8px; width: 2px; border-radius: 0 2px 2px 0; background: var(--bz-accent);
+}
+html:where([data-theme="business"]) .sidebar a:focus-visible,
+html:where([data-theme="business"]) .sidebar-foot a:focus-visible { outline: 2px solid var(--bz-accent); outline-offset: 2px; }
+html:where([data-theme="business"]) .nav-badge {
+  background: #E5E7EB; color: #111827; font-size: 12px; font-weight: 500; line-height: 18px; border-radius: 999px; min-width: 20px;
+}
+html:where([data-theme="business"]) .sidebar-foot { color: #6B7280; font-size: 12px; border-top: 1px solid var(--line); padding: 12px 10px 0; }
+html:where([data-theme="business"]) .sidebar-foot b { color: #374151; font-weight: 500; }
+html:where([data-theme="business"]) .sidebar-foot .user { color: #111827; }
+html:where([data-theme="business"]) .sidebar-foot .user .ava { background: #E5E7EB; color: #374151; font-weight: 600; font-size: 12px; }
+html:where([data-theme="business"]) .sidebar-foot .user a { color: var(--bz-accent); }
+html:where([data-theme="business"]) .sidebar-foot .model .dot { background: var(--good); width: 6px; height: 6px; }
+html:where([data-theme="business"]) .sidebar-foot .mock { color: var(--warn); }
+
+/* ---------- main / page header ---------- */
+html:where([data-theme="business"]) .main { padding: 28px 32px 64px; }
+html:where([data-theme="business"]) .main > .view-host { max-width: 1360px; }
+html:where([data-theme="business"]) .page-head { align-items: flex-end; gap: 12px 16px; margin-bottom: 24px; }
+html:where([data-theme="business"]) .page-head h1 { font-size: 22px; font-weight: 600; letter-spacing: -.017em; line-height: 1.25; }
+html:where([data-theme="business"]) .page-head .sub { color: #4B5563; margin-top: 4px; font-size: 14px; }
+html:where([data-theme="business"]) .crumbs { font-size: 13px; color: #6B7280; }
+html:where([data-theme="business"]) .crumbs a { color: #4B5563; }
+
+/* ---------- primitives ---------- */
+html:where([data-theme="business"]) .card { background: #fff; border: 1px solid var(--line); border-radius: 8px; box-shadow: none; }
+html:where([data-theme="business"]) .card-pad { padding: 20px; }
+html:where([data-theme="business"]) .card h2,
+html:where([data-theme="business"]) .card h3 { font-size: 14px; font-weight: 600; }
+html:where([data-theme="business"]) .card-head { padding: 12px 20px; border-bottom: 1px solid var(--line); min-height: 52px; }
+html:where([data-theme="business"]) .card-head h2 { font-size: 14px; }
+html:where([data-theme="business"]) .card-title { font-size: 14px; }
+html:where([data-theme="business"]) .card-title .muted { font-size: 13px; font-weight: 400; }
+
+html:where([data-theme="business"]) .btn {
+  min-height: 32px; padding: 5px 12px; border-radius: 6px; border: 1px solid #D1D5DB; background: #fff; color: #111827;
+  font-weight: 500; font-size: 14px; gap: 6px; transition: background-color .15s, border-color .15s, color .15s;
+}
+html:where([data-theme="business"]) .btn svg { width: 15px; height: 15px; stroke-width: 1.9; }
+html:where([data-theme="business"]) .btn:hover { background: #F9FAFB; border-color: #C4C9D0; }
+html:where([data-theme="business"]) .btn:active:not(:disabled) { transform: none; }
+html:where([data-theme="business"]) .btn:focus-visible { box-shadow: var(--focus); border-color: #D1D5DB; }
+html:where([data-theme="business"]) .btn-primary { background: #111827; border-color: #111827; color: #fff; }
+html:where([data-theme="business"]) .btn-primary:hover { background: #1F2937; border-color: #1F2937; }
+html:where([data-theme="business"]) .btn-primary:focus-visible { border-color: #111827; }
+html:where([data-theme="business"]) .btn-danger { color: var(--bad); }
+html:where([data-theme="business"]) .btn-danger.btn-primary,
+html:where([data-theme="business"]) .modal .btn-danger[data-ok] { background: var(--bad); border-color: var(--bad); color: #fff; }
+html:where([data-theme="business"]) .btn:disabled,
+html:where([data-theme="business"]) .btn[aria-disabled="true"],
+html:where([data-theme="business"]) .btn:disabled:hover,
+html:where([data-theme="business"]) .btn[aria-disabled="true"]:hover {
+  background: #F9FAFB; border-color: var(--line); border-style: solid; color: #6B7280;
+}
+html:where([data-theme="business"]) .btn-sm { min-height: 28px; padding: 3px 10px; font-size: 13px; }
+html:where([data-theme="business"]) .btn-sm svg { width: 14px; height: 14px; }
+html:where([data-theme="business"]) .btn-ghost { border-color: transparent; background: transparent; color: #374151; }
+html:where([data-theme="business"]) .btn-ghost:hover { background: var(--bz-fill); border-color: transparent; color: #111827; }
+html:where([data-theme="business"]) .btn-ghost:disabled,
+html:where([data-theme="business"]) .btn-ghost:disabled:hover { background: transparent; border-color: transparent; color: #6B7280; }
+html:where([data-theme="business"]) .btn-icon { width: 32px; height: 32px; padding: 0; }
+html:where([data-theme="business"]) .btn-link { color: var(--bz-accent); font-weight: 500; text-decoration: none; }
+html:where([data-theme="business"]) .btn-link:hover { text-decoration: underline; }
+html:where([data-theme="business"]) .btn .n { background: var(--bz-fill); color: #374151; font-size: 12px; font-weight: 500; line-height: 18px; }
+html:where([data-theme="business"]) .btn-primary .n { background: rgba(255, 255, 255, .16); color: #fff; }
+
+html:where([data-theme="business"]) .input,
+html:where([data-theme="business"]) select.input,
+html:where([data-theme="business"]) textarea.input {
+  min-height: 34px; padding: 6px 10px; border: 1px solid #D1D5DB; border-radius: 6px; background: #fff; font-size: 14px;
+  transition: border-color .15s, background-color .15s;
+}
+html:where([data-theme="business"]) .input::placeholder { color: #6B7280; }
+html:where([data-theme="business"]) .input:hover { border-color: #9CA3AF; }
+html:where([data-theme="business"]) .input:focus,
+html:where([data-theme="business"]) select:focus { border-color: var(--bz-accent); box-shadow: 0 0 0 1px var(--bz-accent); }
+html:where([data-theme="business"]) .input:disabled { background: #F9FAFB; color: #6B7280; }
+html:where([data-theme="business"]) .input.invalid:focus,
+html:where([data-theme="business"]) .input[aria-invalid="true"]:focus { box-shadow: 0 0 0 1px var(--bad); }
+html:where([data-theme="business"]) label.field,
+html:where([data-theme="business"]) .field { font-size: 13px; color: #374151; font-weight: 500; gap: 6px; }
+html:where([data-theme="business"]) .field .hint { color: #6B7280; font-size: 12px; }
+html:where([data-theme="business"]) input[type="checkbox"],
+html:where([data-theme="business"]) input[type="radio"] { accent-color: var(--bz-accent); }
+html:where([data-theme="business"]) .input-icon svg { stroke: #6B7280; width: 15px; height: 15px; stroke-width: 1.9; }
+html:where([data-theme="business"]) .muted { color: #6B7280; }
+html:where([data-theme="business"]) .small { font-size: 13px; }
+html:where([data-theme="business"]) .mono { font-size: 13px; }
+html:where([data-theme="business"]) code { background: var(--bz-fill); border: 0; border-radius: 4px; }
+
+/* badges: the only pill shape */
+html:where([data-theme="business"]) .badge {
+  padding: 0 8px; border-radius: 999px; font-size: 12px; font-weight: 500; line-height: 20px; gap: 5px;
+  background: var(--bz-fill); color: #374151;
+}
+html:where([data-theme="business"]) .badge.yes { background: var(--good-bg); color: var(--good); }
+html:where([data-theme="business"]) .badge.no { background: var(--bad-bg); color: var(--bad); }
+html:where([data-theme="business"]) .badge.na { background: var(--bz-fill); color: #4B5563; }
+html:where([data-theme="business"]) .badge.warn { background: var(--warn-bg); color: var(--warn); }
+html:where([data-theme="business"]) .badge.brand { background: var(--bz-fill); color: #374151; }
+html:where([data-theme="business"]) .badge.crit { background: var(--bad-bg); color: var(--bad); font-weight: 600; }
+html:where([data-theme="business"]) .badge.outline { background: #fff; border: 1px solid var(--line); }
+html:where([data-theme="business"]) .badge .dot { width: 6px; height: 6px; }
+
+html:where([data-theme="business"]) .empty { color: #6B7280; }
+html:where([data-theme="business"]) .empty-state .ic { width: auto; height: auto; background: none; color: #9CA3AF; margin-bottom: 4px; }
+html:where([data-theme="business"]) .empty-state .ic svg { width: 28px; height: 28px; stroke-width: 1.6; }
+html:where([data-theme="business"]) .empty-state h3 { font-size: 16px; }
+html:where([data-theme="business"]) .empty-state p { color: #4B5563; }
+
+html:where([data-theme="business"]) .skel { background: var(--bz-fill); border-radius: 4px; }
+html:where([data-theme="business"]) .skel::after { background: linear-gradient(90deg, transparent, rgba(255,255,255,.6), transparent); }
+html:where([data-theme="business"]) .skel-kpis .skel { border-radius: 8px; }
+html:where([data-theme="business"]) .skel-card { border-radius: 8px; }
+
+/* filter chips: small toggles, 6px radius; selected = accent */
+html:where([data-theme="business"]) .chips { gap: 6px; }
+html:where([data-theme="business"]) .chips-label { font-size: 13px; font-weight: 500; color: #4B5563; margin-right: 4px; }
+html:where([data-theme="business"]) .chip {
+  padding: 3px 10px; min-height: 28px; border-radius: 6px; border: 1px solid var(--line); background: #fff;
+  font-size: 13px; font-weight: 500; color: #374151; transition: background-color .15s, border-color .15s, color .15s;
+}
+html:where([data-theme="business"]) .chip:hover { border-color: #D1D5DB; background: #F9FAFB; color: #111827; }
+html:where([data-theme="business"]) .chip[aria-pressed="true"] { background: var(--bz-accent-tint); border-color: var(--bz-accent); color: var(--bz-accent-ink); }
+html:where([data-theme="business"]) .chip .n { background: none; padding: 0; color: #6B7280; font-size: 12px; font-weight: 500; }
+html:where([data-theme="business"]) .chip[aria-pressed="true"] .n { background: none; color: var(--bz-accent-ink); }
+html:where([data-theme="business"]) .chip:disabled { border-style: solid; background: #F9FAFB; color: #6B7280; }
+html:where([data-theme="business"]) .chip.crit-chip[aria-pressed="true"] { background: var(--bad-bg); border-color: var(--bad); color: var(--bad); }
+html:where([data-theme="business"]) .chip.crit-chip[aria-pressed="true"] .n { color: var(--bad); }
+
+/* ---------- tables ---------- */
+html:where([data-theme="business"]) .table { font-size: 14px; }
+html:where([data-theme="business"]) .table th {
+  font-size: 12px; font-weight: 500; color: #4B5563; background: var(--bz-head); padding: 9px 16px;
+  border-bottom: 1px solid var(--line); letter-spacing: 0; text-transform: none;
+}
+html:where([data-theme="business"]) .table td { padding: 11px 16px; border-bottom: 1px solid var(--line); height: 44px; }
+html:where([data-theme="business"]) .table tr.click:hover td { background: var(--bz-head); }
+html:where([data-theme="business"]) .table-wrap { border-radius: 0 0 8px 8px; }
+html:where([data-theme="business"]) .th-sort[data-dir] { color: #111827; }
+html:where([data-theme="business"]) .th-sort .arr { opacity: .55; }
+html:where([data-theme="business"]) .th-sort[data-dir] .arr { opacity: 1; }
+
+html:where([data-theme="business"]) .score-pill { font-weight: 500; color: #111827; }
+html:where([data-theme="business"]) .score-pill.hi,
+html:where([data-theme="business"]) .score-pill.mid { color: #111827; }
+html:where([data-theme="business"]) .score-pill.lo { color: var(--bad); }
+html:where([data-theme="business"]) .strike { color: #6B7280; font-weight: 400; }
+
+html:where([data-theme="business"]) .scorebar { gap: 12px; }
+html:where([data-theme="business"]) .scorebar .sb-track { width: 64px; height: 4px; border-radius: 2px; background: var(--bz-track); }
+html:where([data-theme="business"]) .scorebar .sb-fill { border-radius: 2px; background: var(--good); }
+html:where([data-theme="business"]) .scorebar .sb-fill.mid { background: var(--warn); }
+html:where([data-theme="business"]) .scorebar .sb-fill.lo { background: var(--bad); }
+html:where([data-theme="business"]) .scorebar .score-pill { min-width: 40px; }
+
+html:where([data-theme="business"]) .progress { height: 4px; border-radius: 2px; background: var(--bz-track); }
+html:where([data-theme="business"]) .progress > i { background: #111827; border-radius: 2px; }
+html:where([data-theme="business"]) .toolbar { padding: 14px 20px; }
+html:where([data-theme="business"]) .batch-box { background: #fff; padding: 10px 20px; }
+
+/* ---------- KPIs: one row of stats split by hairlines ---------- */
+html:where([data-theme="business"]) .kpis {
+  display: flex; flex-wrap: wrap; gap: 0; margin-bottom: 24px; border: 1px solid var(--line); border-radius: 8px;
+  overflow: hidden; background: #fff;
+}
+html:where([data-theme="business"]) .kpis > .kpi,
+html:where([data-theme="business"]) .kpis > .card.kpi {
+  flex: 1 1 170px; border: 0; border-radius: 0; box-shadow: -1px 0 0 var(--line), 0 -1px 0 var(--line);
+  padding: 16px 20px 16px; background: #fff; min-width: 0;
+}
+html:where([data-theme="business"]) .kpi .lbl { font-size: 13px; font-weight: 400; color: #4B5563; gap: 6px; }
+html:where([data-theme="business"]) .kpi .lbl svg { display: none; }
+html:where([data-theme="business"]) .kpi .v { font-size: 26px; font-weight: 600; letter-spacing: -.02em; line-height: 1.25; margin-top: 4px; color: #111827; }
+html:where([data-theme="business"]) .kpi .v small { font-size: 14px; color: #6B7280; font-weight: 400; letter-spacing: 0; }
+html:where([data-theme="business"]) .kpi .foot { font-size: 12px; color: #6B7280; padding-top: 2px; }
+html:where([data-theme="business"]) .kpi .small { font-size: 12px; color: #6B7280; margin-top: 2px; }
+html:where([data-theme="business"]) .kpi .meter { height: 3px; border-radius: 2px; background: var(--bz-track); margin-top: 10px; }
+html:where([data-theme="business"]) .kpi .meter i { background: #111827; border-radius: 2px; }
+html:where([data-theme="business"]) .kpi.is-warn .v,
+html:where([data-theme="business"]) .kpi.is-good .v { color: #111827; }
+html:where([data-theme="business"]) .kpi.is-bad .v { color: var(--bad); }
+html:where([data-theme="business"]) a.kpi,
+html:where([data-theme="business"]) button.kpi { transition: background-color .15s; }
+html:where([data-theme="business"]) a.kpi:hover,
+html:where([data-theme="business"]) button.kpi:hover { background: var(--bz-head); border-color: transparent; }
+html:where([data-theme="business"]) a.kpi:focus-visible,
+html:where([data-theme="business"]) button.kpi:focus-visible { box-shadow: inset 0 0 0 2px var(--bz-accent); }
+
+/* ---------- Диалоги ---------- */
+html:where([data-theme="business"]) .conv-tools { padding: 16px 20px 14px; gap: 12px; }
+html:where([data-theme="business"]) .conv-filters {
+  padding: 10px 20px 12px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: #fff; gap: 10px 24px;
+}
+html:where([data-theme="business"]) .conv-table td.id-cell a { font-size: 13px; color: #111827; font-weight: 500; }
+html:where([data-theme="business"]) .conv-table td.id-cell a:hover { color: var(--bz-accent); }
+html:where([data-theme="business"]) .conv-table tr.is-crit td { background: #fff; }
+html:where([data-theme="business"]) .conv-table tr.is-crit td:first-child { box-shadow: inset 2px 0 0 var(--bad); }
+html:where([data-theme="business"]) .conv-table tr.is-crit:hover td { background: var(--bz-head); }
+html:where([data-theme="business"]) .chan { color: #374151; gap: 8px; }
+html:where([data-theme="business"]) .chan svg { color: #6B7280; width: 15px; height: 15px; stroke-width: 1.8; }
+html:where([data-theme="business"]) .lang {
+  font-size: 12px; font-weight: 500; letter-spacing: 0; padding: 0 6px; border-radius: 4px; border: 1px solid var(--line);
+  color: #374151; background: #fff; line-height: 18px;
+}
+html:where([data-theme="business"]) .table-foot { padding: 12px 20px; font-size: 13px; color: #6B7280; }
+
+html:where([data-theme="business"]) .batch-panel { background: #fff; border-color: var(--line); padding: 16px 20px; margin-bottom: 24px; }
+html:where([data-theme="business"]) .batch-panel .bp-ic { width: 32px; height: 32px; border-radius: 6px; background: var(--bz-fill); color: #111827; }
+html:where([data-theme="business"]) .batch-panel.is-done .bp-ic { background: var(--good-bg); color: var(--good); }
+html:where([data-theme="business"]) .batch-panel.has-fail .bp-ic { background: var(--warn-bg); color: var(--warn); }
+html:where([data-theme="business"]) .batch-panel .bp-ic svg { width: 17px; height: 17px; stroke-width: 2; }
+html:where([data-theme="business"]) .batch-panel .bp-title b { font-size: 14px; }
+html:where([data-theme="business"]) .batch-panel .bp-stats { font-size: 13px; color: #4B5563; }
+html:where([data-theme="business"]) .batch-panel .bp-bar { height: 4px; border-radius: 2px; background: var(--bz-track); gap: 0; }
+html:where([data-theme="business"]) .batch-panel .bp-bar i { background: #111827; }
+html:where([data-theme="business"]) .batch-panel .bp-bar i.f { background: var(--bad); }
+html:where([data-theme="business"]) .batch-panel.is-running .bp-bar i:first-child { background-image: none; animation: none; }
+html:where([data-theme="business"]) .batch-panel .bp-pct { font-size: 20px; font-weight: 600; }
+
+html:where([data-theme="business"]) .dropzone { border: 1px dashed #D1D5DB; border-radius: 8px; background: #F9FAFB; color: #4B5563; transition: border-color .15s, background-color .15s; }
+html:where([data-theme="business"]) .dropzone svg { stroke: #6B7280; width: 24px; height: 24px; stroke-width: 1.7; }
+html:where([data-theme="business"]) .dropzone:hover,
+html:where([data-theme="business"]) .dropzone.over { border-color: #9CA3AF; background: var(--bz-fill); }
+html:where([data-theme="business"]) .dropzone:focus-within { box-shadow: var(--focus); border-color: #9CA3AF; }
+html:where([data-theme="business"]) .dropzone.has-file { border-style: solid; border-color: var(--bz-accent); background: #fff; }
+html:where([data-theme="business"]) details.more summary { color: #374151; }
+
+/* ---------- «С чего начать»: a quiet bordered panel ---------- */
+html:where([data-theme="business"]) .guide {
+  background: #fff; color: #111827; border: 1px solid var(--line); border-radius: 8px; box-shadow: none;
+  padding: 16px 20px 18px; margin-bottom: 24px;
+}
+html:where([data-theme="business"]) .guide-head { margin-bottom: 14px; gap: 12px; }
+html:where([data-theme="business"]) .guide-head h2 { font-size: 14px; font-weight: 600; color: #111827; letter-spacing: -.006em; }
+html:where([data-theme="business"]) .guide-prog { font-size: 13px; color: #6B7280; }
+html:where([data-theme="business"]) .guide .guide-x { color: #6B7280; background: transparent; border-color: transparent; }
+html:where([data-theme="business"]) .guide .guide-x:hover { background: var(--bz-fill); color: #111827; }
+html:where([data-theme="business"]) .guide-steps { gap: 16px; }
+html:where([data-theme="business"]) .guide-step:not(:last-child)::before { top: 11px; left: 30px; right: -8px; height: 1px; border-radius: 0; background: var(--line); }
+html:where([data-theme="business"]) .guide-step.is-done:not(:last-child)::before { background: var(--line); }
+html:where([data-theme="business"]) .guide-mark {
+  width: 22px; height: 22px; margin-bottom: 8px; border: 1px solid #D1D5DB; background: #fff; color: #4B5563;
+  font-size: 12px; font-weight: 500;
+}
+html:where([data-theme="business"]) .guide-mark svg { width: 13px; height: 13px; stroke-width: 2.6; }
+html:where([data-theme="business"]) .guide-step.is-done .guide-mark { background: var(--good-bg); border-color: var(--good-bg); color: var(--good); }
+html:where([data-theme="business"]) .guide-step.is-next .guide-mark { border-color: #111827; color: #111827; box-shadow: none; }
+html:where([data-theme="business"]) .guide-t { color: #111827; font-weight: 500; font-size: 13px; line-height: 1.35; }
+html:where([data-theme="business"]) .guide-step.is-done .guide-t { color: #4B5563; }
+html:where([data-theme="business"]) .guide-d { font-size: 13px; color: #6B7280; line-height: 1.4; margin-top: 2px; }
+html:where([data-theme="business"]) .guide-act { padding-top: 10px; }
+html:where([data-theme="business"]) .guide .guide-btn { background: #fff; color: #111827; border-color: #D1D5DB; }
+html:where([data-theme="business"]) .guide .guide-btn:hover { background: #F9FAFB; border-color: #C4C9D0; }
+html:where([data-theme="business"]) .guide .guide-cta { background: #111827; border-color: #111827; color: #fff; }
+html:where([data-theme="business"]) .guide .guide-cta:hover { background: #1F2937; border-color: #1F2937; }
+html:where([data-theme="business"]) .guide .btn:disabled,
+html:where([data-theme="business"]) .guide .btn:disabled:hover { background: #F9FAFB; border-color: var(--line); color: #6B7280; }
+html:where([data-theme="business"]) .guide .btn:focus-visible { box-shadow: var(--focus); border-color: #D1D5DB; }
+html:where([data-theme="business"]) .guide.is-collapsed { padding: 4px 8px; }
+html:where([data-theme="business"]) .guide-bar { min-height: 40px; }
+html:where([data-theme="business"]) .guide-bar:hover { background: #F9FAFB; }
+html:where([data-theme="business"]) .guide-bar:focus-visible { box-shadow: var(--focus); }
+html:where([data-theme="business"]) .guide-bar .guide-mark { border-color: #111827; color: #111827; width: 22px; height: 22px; }
+html:where([data-theme="business"]) .guide-bar-t { color: #111827; }
+html:where([data-theme="business"]) .guide-bar-t b { font-weight: 500; }
+html:where([data-theme="business"]) .guide-bar-more { color: #4B5563; font-size: 13px; }
+
+html:where([data-theme="business"]) .filters-toggle .n { background: var(--bz-accent); }
+
+/* ---------- conversation card (base classes) ---------- */
+html:where([data-theme="business"]) .msg.operator .who { color: #111827; }
+html:where([data-theme="business"]) .msg.client .who { color: #4B5563; }
+html:where([data-theme="business"]) .msg.focus { background: var(--hl); border-left-color: var(--hl-line); }
+html:where([data-theme="business"]) .ev { border-radius: 6px; background: #fff; }
+html:where([data-theme="business"]) .ev .ref { color: #6B7280; font-family: var(--font); }
+html:where([data-theme="business"]) .note { background: none; border-left: 2px solid var(--line); border-radius: 0; padding: 2px 10px; }
+
+/* ---------- modal & toasts ---------- */
+html:where([data-theme="business"]) .modal-back { background: rgba(17, 24, 39, .32); animation: none; }
+html:where([data-theme="business"]) .modal { border-radius: 10px; border: 1px solid var(--line); box-shadow: var(--bz-shadow); animation: none; }
+html:where([data-theme="business"]) .modal-head { padding: 16px 20px; }
+html:where([data-theme="business"]) .modal-head h3 { font-size: 16px; font-weight: 600; }
+html:where([data-theme="business"]) .modal-body { padding: 20px; gap: 16px; }
+html:where([data-theme="business"]) .modal-foot { padding: 12px 20px; }
+html:where([data-theme="business"]) .toast {
+  background: #111827; color: #fff; border-radius: 8px; border-left: 0; box-shadow: var(--bz-shadow); font-size: 14px; padding: 10px 14px; animation: none;
+}
+html:where([data-theme="business"]) .toast.err { background: var(--bad); }
+
+/* ---------- appeals (base) ---------- */
+html:where([data-theme="business"]) .tab { border-radius: 6px; color: #4B5563; }
+html:where([data-theme="business"]) .tab.active { background: var(--bz-fill); color: #111827; }
+html:where([data-theme="business"]) .kv dt { color: #6B7280; }
+html:where([data-theme="business"]) .quote { border-left: 2px solid #D1D5DB; background: #F9FAFB; border-radius: 0 6px 6px 0; }
+html:where([data-theme="business"]) .choice label { border-radius: 6px; border-color: #D1D5DB; }
+html:where([data-theme="business"]) .choice input:checked + span { color: #111827; }
+html:where([data-theme="business"]) .choice label:has(input:checked) { border-color: var(--bz-accent); background: #fff; box-shadow: inset 0 0 0 1px var(--bz-accent); }
+html:where([data-theme="business"]) .delta { font-size: 20px; font-weight: 600; }
+
+/* ---------- Чек-листы ---------- */
+html:where([data-theme="business"]) .cl-item { padding: 12px 16px; }
+html:where([data-theme="business"]) .cl-item:hover { background: var(--bz-head); }
+html:where([data-theme="business"]) .cl-item.sel { background: var(--bz-head); box-shadow: inset 2px 0 0 var(--bz-accent); }
+html:where([data-theme="business"]) .cl-item:focus-visible { box-shadow: inset 0 0 0 2px var(--bz-accent); }
+html:where([data-theme="business"]) .cl-item .t b { font-weight: 500; }
+html:where([data-theme="business"]) .cl-item .ver { font-family: var(--font); font-size: 12px; font-weight: 500; color: #374151; background: var(--bz-fill); border-radius: 4px; }
+html:where([data-theme="business"]) .cl-item .meta { color: #6B7280; }
+html:where([data-theme="business"]) .cl-item .cl-note { border-left: 2px solid var(--line); color: #4B5563; font-size: 13px; }
+html:where([data-theme="business"]) .ed-section-title { font-size: 14px; }
+html:where([data-theme="business"]) .weights { background: #fff; border-color: var(--line); border-radius: 8px; padding: 14px 16px; }
+html:where([data-theme="business"]) .weights-bar { height: 20px; border-radius: 4px; gap: 1px; background: #fff; }
+html:where([data-theme="business"]) .weights-bar i { background: #374151; font-family: var(--font); font-size: 12px; font-weight: 500; }
+html:where([data-theme="business"]) .weights-bar i:nth-child(even) { background: #6B7280; }
+html:where([data-theme="business"]) .weights-bar i:hover { filter: none; background: #111827; }
+html:where([data-theme="business"]) .weights .w-note { color: #6B7280; }
+html:where([data-theme="business"]) .ed-crit { border-radius: 8px; background: #fff; }
+html:where([data-theme="business"]) .ed-crit.open { border-color: #D1D5DB; box-shadow: none; }
+html:where([data-theme="business"]) .ed-crit.has-err { border-color: #FCA5A5; }
+html:where([data-theme="business"]) .ed-crit-head { background: #fff; border-radius: 8px; }
+html:where([data-theme="business"]) .ed-toggle { border-radius: 6px; }
+html:where([data-theme="business"]) .ed-toggle:hover { background: var(--bz-head); }
+html:where([data-theme="business"]) .ed-toggle .code { font-family: var(--font); font-weight: 500; color: #6B7280; font-size: 13px; }
+html:where([data-theme="business"]) .ed-toggle .title { font-weight: 500; }
+html:where([data-theme="business"]) .checkline { border-radius: 6px; border-color: #D1D5DB; }
+html:where([data-theme="business"]) .checkline:has(input:disabled) { background: #F9FAFB; color: #6B7280; }
+html:where([data-theme="business"]) .save-bar { background: #fff; backdrop-filter: none; padding: 12px 20px; border-radius: 0 0 8px 8px; }
+html:where([data-theme="business"]) .ed-settings { background: #fff; border-radius: 8px; }
+html:where([data-theme="business"]) .ed-settings > summary:hover { background: var(--bz-head); }
+html:where([data-theme="business"]) .ed-settings-body { border-radius: 0 0 8px 8px; }
+html:where([data-theme="business"]) .sec-ed .sec-id { background: #F9FAFB; color: #374151; }
+html:where([data-theme="business"]) .diff-item { border-radius: 6px; border-left-width: 2px; }
+html:where([data-theme="business"]) .diff-item.gen { border-left-color: #6B7280; }
+html:where([data-theme="business"]) .diff-item .dh .code { font-family: var(--font); }
+html:where([data-theme="business"]) .diff-old { color: #991B1B; }
+html:where([data-theme="business"]) .diff-new { color: #166534; }
+html:where([data-theme="business"]) .diff-empty { border: 1px dashed #D1D5DB; border-radius: 8px; color: #6B7280; }
+html:where([data-theme="business"]) .success-head { background: #fff; border: 1px solid var(--line); border-radius: 8px; color: #111827; }
+html:where([data-theme="business"]) .success-head svg { color: var(--good); width: 22px; height: 22px; }
+
+/* ---------- Аналитика ---------- */
+html:where([data-theme="business"]) .an-grid,
+html:where([data-theme="business"]) .an-grid-3 { gap: 16px; }
+html:where([data-theme="business"]) .an-grid-3 { margin-bottom: 16px; }
+html:where([data-theme="business"]) .hbar { font-size: 13px; margin: 9px 0; }
+html:where([data-theme="business"]) .hbar .lbl small { color: #6B7280; font-size: 12px; }
+html:where([data-theme="business"]) .hbar .track { height: 8px; background: var(--bz-fill); border-radius: 0 2px 2px 0; border-left: 1px solid #D1D5DB; }
+html:where([data-theme="business"]) .hbar .track::after { border-left: 1px dashed #E5E7EB; top: -2px; bottom: -2px; }
+html:where([data-theme="business"]) .hbar .fill { background: var(--bz-chart); border-radius: 0 2px 2px 0; }
+html:where([data-theme="business"]) .hbar:hover .fill { background: var(--bz-chart-hover); }
+html:where([data-theme="business"]) .hbar .num { font-weight: 500; }
+html:where([data-theme="business"]) .hbar-axis { font-size: 12px; color: #6B7280; }
+html:where([data-theme="business"]) .hist { border-bottom: 1px solid #D1D5DB; }
+html:where([data-theme="business"]) .hist .bin i { background: #9CA3AF; border-radius: 2px 2px 0 0; }
+html:where([data-theme="business"]) .hist .bin:hover i { background: #4B5563; }
+html:where([data-theme="business"]) .hist .bin span { font-size: 12px; font-weight: 500; color: #4B5563; }
+html:where([data-theme="business"]) .hist .avg-line { border-left: 1px dashed #111827; }
+html:where([data-theme="business"]) .hist .avg-line span { font-size: 12px; font-weight: 500; color: #111827; }
+html:where([data-theme="business"]) .hist-x { font-size: 12px; color: #6B7280; }
+html:where([data-theme="business"]) .stack { height: 8px; border-radius: 2px; gap: 1px; }
+html:where([data-theme="business"]) .stack .s-scale { background: var(--bz-chart); }
+html:where([data-theme="business"]) .stack .s-rest { background: var(--bz-track); }
+html:where([data-theme="business"]) .legend { font-size: 12px; color: #4B5563; }
+html:where([data-theme="business"]) .legend i { width: 8px; height: 8px; border-radius: 2px; }
+html:where([data-theme="business"]) .legend i[style*="brand-600"] { background: var(--bz-chart) !important; }
+html:where([data-theme="business"]) .crit-table .ct-title small { color: #6B7280; }
+html:where([data-theme="business"]) .crit-table .pct { font-weight: 500; }
+html:where([data-theme="business"]) .crit-table tr[style*="background"] { background: transparent !important; }
+html:where([data-theme="business"]) .crit-table tr[style*="background"] td:first-child { box-shadow: inset 2px 0 0 var(--bad); }
+html:where([data-theme="business"]) .cost-list { font-size: 14px; }
+html:where([data-theme="business"]) .cost-list dt { color: #4B5563; }
+html:where([data-theme="business"]) .cost-list dd { font-weight: 500; }
+html:where([data-theme="business"]) .insight { background: #F9FAFB; border: 1px solid var(--line); border-radius: 6px; color: #374151; }
+html:where([data-theme="business"]) .insight svg { stroke: #6B7280; }
+
+/* ---------- Точность ---------- */
+html:where([data-theme="business"]) .acc-tools { margin: -8px 0 24px; }
+html:where([data-theme="business"]) .acc-start { padding: 24px; }
+html:where([data-theme="business"]) .acc-start h2 { font-size: 16px; }
+html:where([data-theme="business"]) .acc-steps .n { width: 24px; height: 24px; background: #fff; border: 1px solid #D1D5DB; color: #4B5563; font-size: 12px; font-weight: 500; }
+html:where([data-theme="business"]) .acc-steps li.is-done .n { background: var(--good-bg); border-color: var(--good-bg); color: var(--good); }
+html:where([data-theme="business"]) .acc-steps li.is-done .n svg { width: 13px; height: 13px; stroke-width: 2.6; }
+html:where([data-theme="business"]) .acc-steps span { color: #4B5563; font-size: 13px; }
+html:where([data-theme="business"]) .acc-hint { background: #F9FAFB; border: 1px solid var(--line); border-radius: 6px; color: #374151; }
+html:where([data-theme="business"]) .acc-hint svg { stroke: #6B7280; }
+html:where([data-theme="business"]) .acc-delta { font-size: 12px; font-weight: 500; color: #6B7280; }
+html:where([data-theme="business"]) .acc-delta.up { color: var(--good); }
+html:where([data-theme="business"]) .acc-delta.down { color: var(--bad); }
+html:where([data-theme="business"]) .acc-hist { margin-bottom: 24px; }
+html:where([data-theme="business"]) .acc-table-wrap tr.acc-cur td { background: var(--bz-head); box-shadow: none; }
+html:where([data-theme="business"]) .acc-table-wrap tr.acc-cur td:first-child { box-shadow: inset 2px 0 0 var(--bz-accent); }
+html:where([data-theme="business"]) .acc-note .btn { opacity: .6; }
+html:where([data-theme="business"]) .acc-radio { border: 1.5px solid #9CA3AF; width: 16px; height: 16px; }
+html:where([data-theme="business"]) .acc-radio.on { border-color: var(--bz-accent); background: radial-gradient(circle, var(--bz-accent) 0 3.5px, transparent 4px); }
+html:where([data-theme="business"]) .acc-trend .grid { stroke: var(--line); }
+html:where([data-theme="business"]) .acc-trend .line { stroke: #111827; stroke-width: 1.5; }
+html:where([data-theme="business"]) .acc-trend circle { fill: #fff; stroke: #111827; stroke-width: 1.5; }
+html:where([data-theme="business"]) .acc-trend circle.cur { fill: #111827; }
+html:where([data-theme="business"]) .acc-trend-axis { font-size: 12px; color: #6B7280; }
+html:where([data-theme="business"]) .acc-grid { margin-bottom: 24px; }
+html:where([data-theme="business"]) .acc-hbar .fill.weak { background: var(--warn); }
+html:where([data-theme="business"]) .acc-err { font-size: 12px; color: #6B7280; }
+html:where([data-theme="business"]) .acc-dl dt { color: #6B7280; }
+html:where([data-theme="business"]) .acc-empty pre { background: #F9FAFB; border: 1px solid var(--line); border-radius: 6px; }
+html:where([data-theme="business"]) .acc-bar { height: 4px; background: var(--bz-track); border-radius: 2px; }
+html:where([data-theme="business"]) .acc-bar i { background: #111827; }
+
+html:where([data-theme="business"]) .next-hint { color: #4B5563; }
+html:where([data-theme="business"]) .next-hint svg { stroke: #6B7280; }
+
+/* =====================================================================
+   card.css — conversation card, call player, appeals
+   ===================================================================== */
+html:where([data-theme="business"]) .cv-muted-s { font-size: 13px; color: #6B7280; }
+html:where([data-theme="business"]) .cv-pad { padding: 20px; }
+html:where([data-theme="business"]) .cv-link { color: var(--bz-accent); text-decoration: none; }
+html:where([data-theme="business"]) .cv-link:hover { text-decoration: underline; }
+html:where([data-theme="business"]) .cv-link:focus-visible,
+html:where([data-theme="business"]) .cv-x:focus-visible,
+html:where([data-theme="business"]) .cv-more:focus-visible { outline: 2px solid var(--bz-accent); }
+html:where([data-theme="business"]) .cv-tag { font-size: 12px; line-height: 20px; padding: 0 8px; }
+html:where([data-theme="business"]) .cv-tag.is-warn { background: var(--warn-bg); color: var(--warn); }
+html:where([data-theme="business"]) .cv-tag.is-brand { background: var(--bz-fill); color: #374151; }
+html:where([data-theme="business"]) .cv-tag.is-ok { background: var(--good-bg); color: var(--good); }
+html:where([data-theme="business"]) .cv-pill { font-size: 12px; font-weight: 500; padding: 0 8px; line-height: 20px; }
+html:where([data-theme="business"]) .cv-pill.is-na { background: var(--bz-fill); color: #4B5563; }
+html:where([data-theme="business"]) .cv-pill.is-ok { background: var(--good-bg); color: var(--good); }
+html:where([data-theme="business"]) .cv-pill.is-crit { background: var(--bad-bg); color: var(--bad); font-weight: 600; }
+
+/* header: dialog id + inline facts */
+html:where([data-theme="business"]) .cv-head { margin-bottom: 24px; gap: 12px 16px; }
+html:where([data-theme="business"]) .cv-id-ic { display: none; }
+html:where([data-theme="business"]) .cv-id-title { font-size: 20px; font-weight: 600; letter-spacing: -.012em; line-height: 1.3; }
+html:where([data-theme="business"]) .cv-facts { margin-top: 4px; gap: 2px 16px; color: #4B5563; font-size: 13px; }
+html:where([data-theme="business"]) .cv-facts .cv-svg { display: none; }
+html:where([data-theme="business"]) .cv-sbadge { border-radius: 8px; border: 1px solid var(--line); box-shadow: none; padding: 6px 12px; color: #111827; }
+html:where([data-theme="business"]) .cv-sbadge b { font-size: 20px; font-weight: 600; letter-spacing: -.015em; }
+html:where([data-theme="business"]) .cv-sbadge span { font-size: 13px; color: #6B7280; }
+html:where([data-theme="business"]) .cv-sbadge.cv-tone-hi b,
+html:where([data-theme="business"]) .cv-sbadge.cv-tone-mid b { color: #111827; }
+html:where([data-theme="business"]) .cv-sbadge.cv-tone-lo b { color: var(--bad); }
+
+/* call player: neutral */
+html:where([data-theme="business"]) .cv-player { padding: 16px 20px 14px; margin-bottom: 16px; }
+html:where([data-theme="business"]) .cv-pl-top { gap: 14px; }
+html:where([data-theme="business"]) .cv-pl-play { width: 36px; height: 36px; background: #111827; box-shadow: none; transition: background-color .15s; }
+html:where([data-theme="business"]) .cv-pl-play svg { width: 16px; height: 16px; }
+html:where([data-theme="business"]) .cv-pl-play:hover:not(:disabled) { background: #1F2937; }
+html:where([data-theme="business"]) .cv-pl-play:active:not(:disabled) { transform: none; }
+html:where([data-theme="business"]) .cv-pl-play:focus-visible { outline: 2px solid var(--bz-accent); outline-offset: 2px; }
+html:where([data-theme="business"]) .cv-pl-play:disabled { background: #D1D5DB; }
+html:where([data-theme="business"]) .cv-player.is-buffering .cv-pl-play { animation: none; background: #4B5563; }
+html:where([data-theme="business"]) .cv-pl-time { color: #6B7280; font-size: 13px; font-feature-settings: "tnum"; }
+html:where([data-theme="business"]) .cv-pl-time b { font-size: 16px; font-weight: 600; color: #111827; }
+html:where([data-theme="business"]) .cv-pl-title b { font-size: 14px; font-weight: 500; }
+html:where([data-theme="business"]) .cv-pl-status { font-size: 12px; color: #6B7280; }
+html:where([data-theme="business"]) .cv-seg-toggle { border-color: #D1D5DB; border-radius: 6px; }
+html:where([data-theme="business"]) .cv-seg-toggle button { font-size: 13px; color: #4B5563; min-height: 28px; transition: background-color .15s, color .15s; }
+html:where([data-theme="business"]) .cv-seg-toggle button + button { border-left-color: #D1D5DB; }
+html:where([data-theme="business"]) .cv-seg-toggle button[aria-pressed="true"] { background: var(--bz-fill); color: #111827; font-weight: 500; }
+html:where([data-theme="business"]) .cv-seg-toggle button:focus-visible { outline-color: var(--bz-accent); }
+html:where([data-theme="business"]) .cv-tl { margin-top: 16px; }
+html:where([data-theme="business"]) .cv-tl-labels span { font-size: 12px; font-weight: 500; color: #4B5563; }
+html:where([data-theme="business"]) .cv-tl-labels span.cv-lab-other { font-size: 12px; color: #6B7280; font-weight: 400; }
+html:where([data-theme="business"]) .cv-tl-labels i { width: 6px; height: 6px; }
+html:where([data-theme="business"]) .cv-lab-client i { background: #9CA3AF; }
+html:where([data-theme="business"]) .cv-lab-operator i { background: #111827; }
+html:where([data-theme="business"]) .cv-lab-other i { background: #D1D5DB; }
+html:where([data-theme="business"]) .cv-tl-tracks { background: #F9FAFB; border: 1px solid var(--line); border-radius: 6px; }
+html:where([data-theme="business"]) .cv-lane + .cv-lane { border-top: 1px solid var(--line); }
+html:where([data-theme="business"]) .cv-wave line { stroke: #E5E7EB; }
+html:where([data-theme="business"]) .cv-lane-client .cv-wave rect,
+html:where([data-theme="business"]) .cv-lane-operator .cv-wave rect { fill: #D1D5DB; }
+html:where([data-theme="business"]) .cv-lane-other .cv-wave rect { fill: #E5E7EB; }
+html:where([data-theme="business"]) .cv-lane-client .cv-wave.is-played rect { fill: #6B7280; }
+html:where([data-theme="business"]) .cv-lane-operator .cv-wave.is-played rect { fill: #374151; }
+html:where([data-theme="business"]) .cv-lane-other .cv-wave.is-played rect { fill: #9CA3AF; }
+html:where([data-theme="business"]) .cv-seg { border-radius: 3px; transition: background-color .15s; }
+html:where([data-theme="business"]) .cv-seg:hover { background: rgba(17, 24, 39, .06); }
+html:where([data-theme="business"]) .cv-seg:focus-visible { outline: 2px solid var(--bz-accent); }
+html:where([data-theme="business"]) .cv-seg.is-range { background: rgba(17, 24, 39, .05); }
+html:where([data-theme="business"]) .cv-seg.is-evidence { background: var(--hl); box-shadow: inset 2px 0 0 var(--hl-line); }
+html:where([data-theme="business"]) .cv-seg.is-active { background: rgba(17, 24, 39, .08); }
+html:where([data-theme="business"]) .cv-seg.is-focus { background: var(--hl); box-shadow: inset 2px 0 0 var(--hl-line), inset 0 0 0 1px var(--hl-line); }
+html:where([data-theme="business"]) .cv-playhead { background: #111827; width: 1.5px; }
+html:where([data-theme="business"]) .cv-playhead::before { width: 8px; height: 8px; left: -3.25px; top: -2px; background: #111827; }
+html:where([data-theme="business"]) .cv-hover { background: #6B7280; }
+html:where([data-theme="business"]) .cv-hover::after { background: #111827; font-size: 12px; border-radius: 4px; }
+html:where([data-theme="business"]) .cv-tl-axis { font-size: 12px; color: #6B7280; }
+html:where([data-theme="business"]) .cv-pl-seek { background: linear-gradient(90deg, #111827 var(--p, 0%), #E5E7EB var(--p, 0%)); height: 3px; }
+html:where([data-theme="business"]) .cv-pl-seek::-webkit-slider-thumb { width: 12px; height: 12px; background: #111827; border: 2px solid #fff; box-shadow: 0 0 0 1px #D1D5DB; }
+html:where([data-theme="business"]) .cv-pl-seek::-moz-range-thumb { width: 10px; height: 10px; background: #111827; border: 2px solid #fff; box-shadow: 0 0 0 1px #D1D5DB; }
+html:where([data-theme="business"]) .cv-pl-seek:focus-visible { outline-color: var(--bz-accent); }
+
+/* grid */
+html:where([data-theme="business"]) .cv-grid { gap: 16px; grid-template-columns: minmax(0, 1fr) minmax(400px, 500px); }
+
+/* transcript */
+html:where([data-theme="business"]) .cv-filter { gap: 4px; }
+html:where([data-theme="business"]) .cv-filter button {
+  border: 1px solid var(--line); background: #fff; color: #374151; border-radius: 6px; padding: 3px 10px; min-height: 28px;
+  font-size: 13px; font-weight: 500; transition: background-color .15s, border-color .15s, color .15s;
+}
+html:where([data-theme="business"]) .cv-filter button:hover { border-color: #D1D5DB; background: #F9FAFB; }
+html:where([data-theme="business"]) .cv-filter button[aria-pressed="true"] { background: var(--bz-accent-tint); border-color: var(--bz-accent); color: var(--bz-accent-ink); }
+html:where([data-theme="business"]) .cv-filter button:focus-visible { outline-color: var(--bz-accent); }
+html:where([data-theme="business"]) .cv-tr-ctx { background: #F9FAFB; border-bottom: 1px solid var(--line); color: #374151; font-size: 13px; padding: 6px 8px 6px 20px; }
+html:where([data-theme="business"]) .cv-tr-ctx-dot { width: 10px; height: 10px; border-radius: 2px; background: var(--hl); box-shadow: inset 2px 0 0 var(--hl-line); }
+html:where([data-theme="business"]) .cv-x { border-radius: 6px; color: #4B5563; }
+html:where([data-theme="business"]) .cv-x:hover { background: var(--bz-fill); color: #111827; }
+html:where([data-theme="business"]) .cv-transcript { background: #fff; padding: 12px 0 20px; border-radius: 0 0 8px 8px; }
+html:where([data-theme="business"]) .cv-transcript:focus-visible { box-shadow: inset 0 0 0 2px var(--bz-accent); }
+html:where([data-theme="business"]) .cv-msg { padding: 4px 20px; }
+html:where([data-theme="business"]) .cv-bubble {
+  padding: 8px 12px 9px; border-radius: 10px; border: 1px solid var(--cv-client-line); background: var(--cv-client-bg);
+  box-shadow: none; transition: background-color .15s, border-color .15s;
+}
+html:where([data-theme="business"]) .cv-sp-client .cv-bubble { border-bottom-left-radius: 4px; }
+html:where([data-theme="business"]) .cv-sp-operator .cv-bubble { background: #fff; border-color: var(--line); border-bottom-right-radius: 4px; }
+html:where([data-theme="business"]) .cv-mhead { gap: 8px; font-size: 12px; color: #6B7280; margin-bottom: 2px; }
+html:where([data-theme="business"]) .cv-n,
+html:where([data-theme="business"]) .cv-ts { font-family: var(--font); font-size: 12px; color: #6B7280; font-feature-settings: "tnum"; }
+html:where([data-theme="business"]) .cv-who { font-weight: 500; font-size: 12px; }
+/* #N / time on the grey client bubble: a touch darker to keep 4.5:1 */
+html:where([data-theme="business"]) .cv-sp-client .cv-n,
+html:where([data-theme="business"]) .cv-sp-client .cv-ts { color: #5F6673; }
+html:where([data-theme="business"]) .cv-sp-client .cv-who { color: #374151; }
+html:where([data-theme="business"]) .cv-sp-operator .cv-who { color: #111827; }
+html:where([data-theme="business"]) .cv-text { font-size: 14px; line-height: 1.5; color: #111827; }
+html:where([data-theme="business"]) .cv-play {
+  background: transparent; color: #4B5563; border-radius: 4px; padding: 1px 6px 1px 4px; font-size: 12px; font-weight: 500;
+  transition: background-color .15s, color .15s;
+}
+html:where([data-theme="business"]) .cv-play:hover { background: rgba(17, 24, 39, .06); color: #111827; }
+html:where([data-theme="business"]) .cv-play:focus-visible { outline-color: var(--bz-accent); }
+html:where([data-theme="business"]) .cv-msg.cv-ctx { padding: 4px 20px; }
+html:where([data-theme="business"]) .cv-ctx-in { background: transparent; border: 1px solid transparent; color: #6B7280; font-size: 12px; padding: 2px 10px; border-radius: 6px; }
+html:where([data-theme="business"]) .cv-ctx-in .cv-who { color: #6B7280; font-size: 12px; }
+html:where([data-theme="business"]) .cv-run-toggle {
+  border: 1px solid var(--line); border-radius: 6px; background: #fff; color: #4B5563; font-size: 13px; min-height: 40px;
+  transition: background-color .15s, border-color .15s;
+}
+html:where([data-theme="business"]) .cv-run-toggle:hover { background: #F9FAFB; border-color: #D1D5DB; }
+html:where([data-theme="business"]) .cv-run-toggle:focus-visible { outline-color: var(--bz-accent); }
+html:where([data-theme="business"]) .cv-run-ic { color: #9CA3AF; font-size: 16px; }
+html:where([data-theme="business"]) .cv-run-label { color: #374151; }
+html:where([data-theme="business"]) .cv-run-range { font-family: var(--font); font-size: 12px; color: #6B7280; }
+html:where([data-theme="business"]) .cv-run-prev { color: #6B7280; }
+html:where([data-theme="business"]) .cv-run-act { color: var(--bz-accent); }
+html:where([data-theme="business"]) .cv-run:not(.is-collapsed) .cv-run-toggle { border-color: var(--line); }
+html:where([data-theme="business"]) .cv-run.is-playing .cv-run-toggle { border-color: #111827; box-shadow: none; }
+html:where([data-theme="business"]) .cv-run.is-collapsed:has(.in-range) .cv-run-toggle { background: #F9FAFB; border-color: #D1D5DB; }
+
+html:where([data-theme="business"]) .cv-msg.in-range { background: rgba(17, 24, 39, .025); box-shadow: inset 2px 0 0 #D1D5DB; }
+/* The one highlighter: evidence replies. */
+html:where([data-theme="business"]) .cv-msg.is-evidence .cv-bubble,
+html:where([data-theme="business"]) .cv-msg.is-evidence .cv-ctx-in {
+  background: var(--hl); border-color: transparent; border-left: 2px solid var(--hl-line); box-shadow: none;
+  border-top-left-radius: 2px; border-bottom-left-radius: 2px;
+}
+html:where([data-theme="business"]) .cv-msg.is-playing .cv-bubble,
+html:where([data-theme="business"]) .cv-msg.is-playing .cv-ctx-in { box-shadow: 0 0 0 1px #111827; }
+html:where([data-theme="business"]) .cv-msg.is-playing .cv-who::before { background: #111827; animation: none; width: 6px; height: 6px; }
+html:where([data-theme="business"]) .cv-msg.is-focus .cv-bubble,
+html:where([data-theme="business"]) .cv-msg.is-focus .cv-ctx-in {
+  background: var(--hl); border-color: transparent; border-left: 2px solid var(--hl-line);
+  border-top-left-radius: 2px; border-bottom-left-radius: 2px; box-shadow: 0 0 0 1px rgba(202, 138, 4, .45);
+}
+html:where([data-theme="business"]) .cv-msg.is-flash .cv-bubble,
+html:where([data-theme="business"]) .cv-msg.is-flash .cv-ctx-in { animation: none; }
+html:where([data-theme="business"]) .cv-follow { background: #111827; border-radius: 6px; box-shadow: var(--bz-shadow); font-size: 13px; min-height: 32px; }
+html:where([data-theme="business"]) .cv-follow:focus-visible { outline: 2px solid var(--bz-accent); }
+
+/* evaluation panel */
+html:where([data-theme="business"]) .cv-hist { font-size: 13px; padding: 4px 8px; min-height: 30px; }
+html:where([data-theme="business"]) .cv-cta { padding: 24px; gap: 10px; }
+html:where([data-theme="business"]) .cv-cta-ic { display: none; }
+html:where([data-theme="business"]) .cv-cta-title { font-size: 16px !important; margin-top: 0 !important; }
+html:where([data-theme="business"]) .cv-cta-text { color: #4B5563; }
+html:where([data-theme="business"]) .cv-cta-sub { font-size: 13px; color: #374151; }
+html:where([data-theme="business"]) .cv-cta-crits { background: #fff; border: 1px solid var(--line); border-radius: 6px; }
+html:where([data-theme="business"]) .cv-cta-btn { min-height: 40px; font-size: 14px; }
+
+/* total: a plain large number instead of the ring */
+html:where([data-theme="business"]) .cv-score { gap: 28px; align-items: flex-start; padding: 20px 20px 18px; }
+html:where([data-theme="business"]) .cv-ring { width: auto !important; height: auto !important; min-width: 108px; }
+html:where([data-theme="business"]) .cv-ring svg { display: none; }
+html:where([data-theme="business"]) .cv-ring-val { position: static; flex-direction: row; align-items: baseline; justify-content: flex-start; gap: 6px; }
+html:where([data-theme="business"]) .cv-ring-val b { font-size: 40px; font-weight: 600; letter-spacing: -.03em; line-height: 1.1; color: #111827; font-feature-settings: "tnum"; }
+html:where([data-theme="business"]) .cv-ring-val span { font-size: 16px; color: #6B7280; margin: 0; }
+html:where([data-theme="business"]) .cv-ring.cv-tone-lo .cv-ring-val b { color: var(--bad); }
+html:where([data-theme="business"]) .cv-score-side { gap: 6px; }
+html:where([data-theme="business"]) .cv-score-cap { font-size: 13px; font-weight: 500; color: #4B5563; }
+html:where([data-theme="business"]) .cv-revised { gap: 10px; }
+html:where([data-theme="business"]) .cv-revised small { font-size: 12px; color: #6B7280; font-weight: 400; }
+html:where([data-theme="business"]) .cv-revised-was s { font-size: 16px; color: #6B7280; font-weight: 400; }
+html:where([data-theme="business"]) .cv-revised-now b { font-size: 20px; font-weight: 600; }
+html:where([data-theme="business"]) .cv-revised-arrow { color: #9CA3AF; font-size: 16px; }
+/* The large number already is the final total: keep "model score (struck) + delta", drop the repeat. */
+html:where([data-theme="business"]) .cv-score .cv-revised-arrow,
+html:where([data-theme="business"]) .cv-score .cv-revised-now { display: none; }
+html:where([data-theme="business"]) .cv-revised { align-items: baseline; }
+html:where([data-theme="business"]) .cv-score .cv-revised-was small { display: inline; margin: 0 6px 0 0; font-size: 13px; }
+html:where([data-theme="business"]) .cv-delta { background: none !important; padding: 0; font-size: 13px; font-weight: 600; }
+html:where([data-theme="business"]) .cv-delta.is-up { color: var(--good); }
+html:where([data-theme="business"]) .cv-delta.is-down { color: var(--bad); }
+html:where([data-theme="business"]) .cv-secs { gap: 10px; margin-top: 8px; }
+html:where([data-theme="business"]) .cv-sec { font-size: 13px; color: #4B5563; gap: 4px 8px; }
+html:where([data-theme="business"]) .cv-sec b { font-weight: 500; color: #111827; }
+html:where([data-theme="business"]) .cv-bar { height: 4px; border-radius: 2px; background: var(--bz-track); }
+html:where([data-theme="business"]) .cv-bar i { border-radius: 2px; background: var(--good); }
+html:where([data-theme="business"]) .cv-bar.cv-tone-mid i { background: var(--warn); }
+html:where([data-theme="business"]) .cv-bar.cv-tone-lo i { background: var(--bad); }
+
+html:where([data-theme="business"]) .cv-summary { margin: 0 20px 16px; font-size: 14px; color: #374151; }
+html:where([data-theme="business"]) .cv-summary-h { font-size: 13px !important; font-weight: 600; color: #111827; margin-bottom: 4px !important; }
+html:where([data-theme="business"]) .cv-more { color: var(--bz-accent); }
+
+/* banners: text + small icon, no tinted slab */
+html:where([data-theme="business"]) .cv-banner { margin: 0 20px; padding: 10px 0 0; border-radius: 0; font-size: 13px; background: none; border: 0; border-top: 1px solid var(--line); gap: 8px; }
+html:where([data-theme="business"]) .cv-banner.is-ok { background: none; color: var(--good); font-weight: 500; }
+html:where([data-theme="business"]) .cv-banner.is-crit { background: none; border: 0; border-top: 1px solid var(--line); color: #111827; }
+html:where([data-theme="business"]) .cv-banner.is-crit b { color: var(--bad); }
+html:where([data-theme="business"]) .cv-banner-ic { width: 18px; height: 18px; font-size: 16px; }
+html:where([data-theme="business"]) .cv-banner.is-crit .cv-banner-ic { width: 18px; height: 18px; background: none; color: var(--bad); font-size: 16px; }
+html:where([data-theme="business"]) .cv-banner .cv-link { color: var(--bad); }
+
+/* «Почему снижена оценка»: a simple list */
+html:where([data-theme="business"]) .cv-why { margin: 20px 20px 0; border: 0; background: none; border-radius: 0; padding: 0; }
+html:where([data-theme="business"]) .cv-why-head h3 { font-size: 14px; font-weight: 600; }
+html:where([data-theme="business"]) .cv-why-sum { font-size: 13px; color: var(--bad); font-weight: 500; }
+html:where([data-theme="business"]) .cv-why-list { margin-top: 8px; border-top: 1px solid var(--line); }
+html:where([data-theme="business"]) .cv-why-item { grid-template-columns: 18px minmax(0, 1fr); gap: 10px; padding: 12px 0; }
+html:where([data-theme="business"]) .cv-why-item + .cv-why-item { border-top: 1px solid var(--line); }
+html:where([data-theme="business"]) .cv-why-item > .cv-ic { margin-top: 3px; }
+html:where([data-theme="business"]) .cv-why-name { font-weight: 500; color: #111827; text-decoration: none; padding: 0; min-height: 0; }
+html:where([data-theme="business"]) .cv-why-name:hover { color: var(--bz-accent); }
+html:where([data-theme="business"]) .cv-why-pts { font-size: 13px; color: #6B7280; }
+html:where([data-theme="business"]) .cv-why-pts b { color: var(--bad); font-weight: 600; margin-left: 8px; }
+html:where([data-theme="business"]) .cv-why-text { font-size: 13px; color: #4B5563; margin: 2px 0 8px; }
+
+/* criteria list */
+html:where([data-theme="business"]) .cv-crits { margin-top: 20px; border-top: 1px solid var(--line); }
+html:where([data-theme="business"]) .cv-crits-h { padding: 16px 20px 10px; }
+html:where([data-theme="business"]) .cv-crits-h h3 { font-size: 14px; font-weight: 600; }
+html:where([data-theme="business"]) .cv-group-h {
+  padding: 7px 20px; font-size: 12px; font-weight: 500; color: #4B5563; background: var(--bz-head); border-top: 1px solid var(--line);
+}
+html:where([data-theme="business"]) .cv-group-h span:last-child { color: #4B5563; font-weight: 500; }
+html:where([data-theme="business"]) .cv-crit { border-top: 1px solid var(--line); }
+html:where([data-theme="business"]) .cv-crit-top { min-height: 48px; padding: 10px 20px; grid-template-columns: 18px minmax(0, 1fr) auto 12px; gap: 12px; transition: background-color .15s; }
+html:where([data-theme="business"]) .cv-crit-top:hover { background: var(--bz-head); }
+html:where([data-theme="business"]) .cv-crit-top:focus-visible { outline: 2px solid var(--bz-accent); outline-offset: -2px; }
+html:where([data-theme="business"]) .cv-crit.is-open { background: #fff; box-shadow: none; }
+html:where([data-theme="business"]) .cv-crit.is-open .cv-crit-top:hover { background: var(--bz-head); }
+html:where([data-theme="business"]) .cv-ic { width: 18px; height: 18px; border-radius: 0; background: none; color: #6B7280; font-size: 16px; }
+html:where([data-theme="business"]) .cv-ic .cv-svg { stroke-width: 2.2; }
+html:where([data-theme="business"]) .cv-ic.cv-k-yes { background: none; color: var(--good); }
+html:where([data-theme="business"]) .cv-ic.cv-k-no { background: none; color: var(--bad); }
+html:where([data-theme="business"]) .cv-ic.cv-k-part { background: none; color: var(--warn); }
+html:where([data-theme="business"]) .cv-ic.cv-k-crit { background: none; color: var(--bad); }
+html:where([data-theme="business"]) .cv-ic.cv-k-na { background: none; color: #6B7280; }
+html:where([data-theme="business"]) .cv-na-t { font-size: 10px; font-weight: 600; letter-spacing: 0; }
+html:where([data-theme="business"]) .cv-crit-title { font-weight: 500; font-size: 14px; }
+html:where([data-theme="business"]) .cv-code { font-family: var(--font); font-size: 13px; font-weight: 400; color: #6B7280; margin-right: 6px; }
+html:where([data-theme="business"]) .cv-crit-sub { font-size: 12px; color: #6B7280; margin-top: 2px; }
+html:where([data-theme="business"]) .cv-ans { font-weight: 500; }
+html:where([data-theme="business"]) .cv-ans-na { color: #4B5563; }
+html:where([data-theme="business"]) .cv-crit-pts { font-size: 14px; font-weight: 600; font-feature-settings: "tnum"; }
+html:where([data-theme="business"]) .cv-of { font-size: 13px; color: #6B7280; font-weight: 400; }
+html:where([data-theme="business"]) .cv-chev { width: 6px; height: 6px; border-right-width: 1.5px; border-bottom-width: 1.5px; border-color: #9CA3AF; }
+html:where([data-theme="business"]) .cv-crit-body { padding: 2px 20px 16px 50px; font-size: 14px; color: #374151; }
+html:where([data-theme="business"]) .cv-expl { margin: 0 0 10px; }
+html:where([data-theme="business"]) .cv-sub-h { font-size: 12px; font-weight: 500; color: #6B7280; margin: 12px 0 6px; }
+html:where([data-theme="business"]) .cv-ev-list { gap: 0; border-top: 1px solid var(--line); }
+html:where([data-theme="business"]) .cv-ev {
+  border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: none; padding: 8px 10px; min-height: 44px; gap: 2px;
+  box-shadow: inset 2px 0 0 transparent; transition: background-color .15s, box-shadow .15s;
+}
+html:where([data-theme="business"]) .cv-ev:hover { background: #FEFCE8; border-color: var(--line); box-shadow: inset 2px 0 0 var(--hl-line); }
+html:where([data-theme="business"]) .cv-ev:focus-visible { outline: 2px solid var(--bz-accent); outline-offset: -2px; }
+html:where([data-theme="business"]) .cv-ev-ref,
+html:where([data-theme="business"]) .cv-ev-client .cv-ev-ref,
+html:where([data-theme="business"]) .cv-ev-bot .cv-ev-ref,
+html:where([data-theme="business"]) .cv-ev-system .cv-ev-ref { font-family: var(--font); font-size: 12px; font-weight: 500; color: #6B7280; font-feature-settings: "tnum"; }
+html:where([data-theme="business"]) .cv-ev-q { color: #374151; font-size: 13px; }
+html:where([data-theme="business"]) .cv-note { background: none; border-radius: 0; border-left: 2px solid var(--line); padding: 2px 0 2px 10px; font-size: 13px; color: #4B5563; margin: 10px 0; }
+html:where([data-theme="business"]) .cv-note-na { background: none; }
+html:where([data-theme="business"]) .cv-note-warn { background: none; border-left-color: var(--warn); color: var(--warn); }
+html:where([data-theme="business"]) .cv-note-range { background: none; box-shadow: none; border-left-color: #D1D5DB; }
+html:where([data-theme="business"]) .cv-note-appeal { background: none; }
+html:where([data-theme="business"]) .cv-note-appeal.is-open { background: none; border-left-color: var(--warn); color: #374151; }
+html:where([data-theme="business"]) .cv-review { background: none; border-left: 2px solid #9CA3AF; border-radius: 0; padding: 2px 0 2px 10px; color: #374151; }
+html:where([data-theme="business"]) .cv-review-h { color: #111827; font-weight: 500; }
+html:where([data-theme="business"]) .cv-was,
+html:where([data-theme="business"]) .cv-now { background: #fff; border: 1px solid var(--line); border-radius: 6px; }
+html:where([data-theme="business"]) .cv-was small,
+html:where([data-theme="business"]) .cv-now small { font-size: 12px; color: #6B7280; font-weight: 400; }
+html:where([data-theme="business"]) .cv-was { color: #6B7280; }
+html:where([data-theme="business"]) .cv-now { box-shadow: none; border-color: #9CA3AF; }
+html:where([data-theme="business"]) .cv-crit-actions { margin-top: 12px; }
+html:where([data-theme="business"]) .cv-meta { padding: 12px 20px; font-size: 12px; color: #6B7280; }
+html:where([data-theme="business"]) .cv-ap-cur { background: #F9FAFB; border-radius: 6px; }
+html:where([data-theme="business"]) .cv-why-review { color: #111827; }
+html:where([data-theme="business"]) .cv-why-model,
+html:where([data-theme="business"]) .cv-expl-model { color: #6B7280 !important; }
+html:where([data-theme="business"]) .cv-expl-k { color: #374151; }
+
+/* loading */
+html:where([data-theme="business"]) .cv-ld-orb { width: 28px; height: 28px; }
+html:where([data-theme="business"]) .cv-ld-orb i { border-width: 2px; border-color: #E5E7EB; border-top-color: #111827; }
+html:where([data-theme="business"]) .cv-ld-orb i:nth-child(n+2) { display: none; }
+html:where([data-theme="business"]) .cv-ld-bar { height: 2px; background: var(--bz-track); }
+html:where([data-theme="business"]) .cv-ld-bar i { background: #111827; }
+html:where([data-theme="business"]) .cv-ld-steps li.is-done::before { background: #111827; border-color: #111827; }
+html:where([data-theme="business"]) .cv-ld-steps li.is-now::before { border-color: #111827; border-right-color: transparent; }
+html:where([data-theme="business"]) .cv-skel-row i { background: var(--bz-fill); animation: none; }
+html:where([data-theme="business"]) .cv-skel-row .sq { width: 18px; height: 18px; border-radius: 4px; }
+
+/* ---------- appeals: list ---------- */
+html:where([data-theme="business"]) .ap-tab { border-radius: 6px; min-height: 32px; padding: 4px 10px; color: #4B5563; font-size: 14px; transition: background-color .15s, color .15s; }
+html:where([data-theme="business"]) .ap-tab:hover { background: var(--bz-fill); color: #111827; }
+html:where([data-theme="business"]) .ap-tab[aria-selected="true"] { background: var(--bz-fill); color: #111827; }
+html:where([data-theme="business"]) .ap-tab:focus-visible { outline-color: var(--bz-accent); }
+html:where([data-theme="business"]) .ap-count { background: none; border: 0; color: #6B7280; font-size: 13px; padding: 0; min-width: 0; font-feature-settings: "tnum"; }
+html:where([data-theme="business"]) .ap-tab[aria-selected="true"] .ap-count { color: #111827; }
+html:where([data-theme="business"]) .ap-row { padding: 12px 20px; gap: 6px 20px; transition: background-color .15s; }
+html:where([data-theme="business"]) a.ap-row:hover { background: var(--bz-head); }
+html:where([data-theme="business"]) .ap-row:focus-visible { outline-color: var(--bz-accent); }
+html:where([data-theme="business"]) .ap-row-head { background: var(--bz-head); font-size: 12px; color: #4B5563; font-weight: 500; padding-top: 9px; padding-bottom: 9px; }
+html:where([data-theme="business"]) .ap-id { font-size: 12px; color: #6B7280; }
+html:where([data-theme="business"]) .ap-crit { font-weight: 500; }
+html:where([data-theme="business"]) .ap-dialog { font-size: 13px; color: #6B7280; }
+html:where([data-theme="business"]) .ap-comment { color: #374151; }
+html:where([data-theme="business"]) .ap-author { color: #6B7280; }
+html:where([data-theme="business"]) .ap-ba-k { color: #6B7280; }
+html:where([data-theme="business"]) .ap-was { color: #6B7280; }
+html:where([data-theme="business"]) .ap-date { font-size: 13px; color: #6B7280; }
+html:where([data-theme="business"]) .ap-status { font-size: 12px; font-weight: 500; padding: 0 8px; line-height: 20px; }
+html:where([data-theme="business"]) .ap-status .cv-svg { font-size: 12px; }
+html:where([data-theme="business"]) .ap-status.is-open { background: var(--warn-bg); color: var(--warn); }
+html:where([data-theme="business"]) .ap-status.is-changed { background: var(--bz-fill); color: #111827; }
+html:where([data-theme="business"]) .ap-status.is-confirmed { background: var(--good-bg); color: var(--good); }
+html:where([data-theme="business"]) .ap-delta { background: none !important; padding: 0; font-size: 12px; font-weight: 600; }
+html:where([data-theme="business"]) .ap-delta.is-up { color: var(--good); }
+html:where([data-theme="business"]) .ap-delta.is-down { color: var(--bad); }
+html:where([data-theme="business"]) .ap-delta.is-zero { color: #6B7280; }
+html:where([data-theme="business"]) .ap-empty { color: #6B7280; }
+html:where([data-theme="business"]) .ap-empty b { color: #111827; font-size: 14px; }
+html:where([data-theme="business"]) .ap-empty-ic { background: none; color: #9CA3AF; width: auto; height: auto; font-size: 24px; }
+
+/* ---------- appeals: detail ---------- */
+html:where([data-theme="business"]) .ap-head-sub { color: #4B5563; font-size: 13px; }
+html:where([data-theme="business"]) .ap-timeline { padding: 16px 20px; }
+html:where([data-theme="business"]) .ap-timeline li { font-size: 13px; color: #6B7280; }
+html:where([data-theme="business"]) .ap-timeline li:not(:last-child)::after { left: 8.5px; top: 22px; width: 1px; background: var(--line); }
+html:where([data-theme="business"]) .ap-timeline li.is-done:not(:last-child)::after { background: var(--line); }
+html:where([data-theme="business"]) .ap-tl-dot { width: 18px; height: 18px; border: 1px solid #D1D5DB; background: #fff; font-size: 11px; }
+html:where([data-theme="business"]) .ap-timeline li.is-done .ap-tl-dot { background: var(--good-bg); border-color: var(--good-bg); color: var(--good); }
+html:where([data-theme="business"]) .ap-timeline li.is-now .ap-tl-dot { border-color: var(--warn); background: #fff; }
+html:where([data-theme="business"]) .ap-tl-text b { font-size: 13px; font-weight: 500; }
+html:where([data-theme="business"]) .ap-crit-card { padding: 20px; }
+html:where([data-theme="business"]) .ap-crit-title h2 { font-size: 16px; font-weight: 600; }
+html:where([data-theme="business"]) .ap-crit-title .cv-ic { width: 20px; height: 20px; font-size: 18px; border-radius: 0; margin-top: 1px; }
+html:where([data-theme="business"]) .ap-crit-desc { color: #4B5563; }
+html:where([data-theme="business"]) .ap-disputed { background: #fff; border: 1px solid var(--line); border-radius: 6px; }
+html:where([data-theme="business"]) .ap-disputed-k { font-size: 12px; color: #6B7280; font-weight: 400; }
+html:where([data-theme="business"]) .ap-disputed-v { font-size: 16px; font-weight: 600; }
+html:where([data-theme="business"]) .ap-sec-h { font-size: 13px; color: #111827; font-weight: 600; margin: 20px 0 6px; }
+html:where([data-theme="business"]) .ap-scale div { border-radius: 4px; color: #4B5563; }
+html:where([data-theme="business"]) .ap-frag-gap span { background: #fff; border: 1px solid var(--line); color: #6B7280; font-size: 12px; }
+html:where([data-theme="business"]) .ap-frag { background: #fff; border-radius: 0 0 8px 8px; }
+html:where([data-theme="business"]) .ap-quote { border-left: 2px solid #D1D5DB; background: #F9FAFB; border-radius: 0 6px 6px 0; padding: 10px 14px; }
+html:where([data-theme="business"]) .ap-by { color: #6B7280; font-size: 13px; }
+html:where([data-theme="business"]) .ap-choice label,
+html:where([data-theme="business"]) .ap-opt label { border-radius: 6px; border-color: #D1D5DB; background: #fff; transition: border-color .15s, background-color .15s; }
+html:where([data-theme="business"]) .ap-choice label:hover,
+html:where([data-theme="business"]) .ap-opt label:hover { border-color: #9CA3AF; }
+html:where([data-theme="business"]) .ap-choice label:has(input:checked),
+html:where([data-theme="business"]) .ap-opt label:has(input:checked) { border-color: var(--bz-accent); background: #fff; box-shadow: inset 0 0 0 1px var(--bz-accent); }
+html:where([data-theme="business"]) .ap-choice label:has(input:focus-visible),
+html:where([data-theme="business"]) .ap-opt label:has(input:focus-visible) { outline-color: var(--bz-accent); }
+html:where([data-theme="business"]) .ap-choice input,
+html:where([data-theme="business"]) .ap-opt input { accent-color: var(--bz-accent); }
+html:where([data-theme="business"]) .ap-choice b { font-weight: 500; }
+html:where([data-theme="business"]) .ap-choice small { color: #6B7280; font-size: 12px; }
+html:where([data-theme="business"]) .ap-opt-pts { font-weight: 500; color: #4B5563; font-size: 13px; }
+html:where([data-theme="business"]) .ap-preview { background: #F9FAFB; border-radius: 6px; }
+html:where([data-theme="business"]) .ap-result { padding: 20px; }
+html:where([data-theme="business"]) .ap-result-h h3 { font-size: 14px; }
+html:where([data-theme="business"]) .ap-totals { background: #fff; border: 1px solid var(--line); border-radius: 8px; }
+html:where([data-theme="business"]) .ap-total small { color: #6B7280; font-weight: 400; }
+html:where([data-theme="business"]) .ap-total b { font-size: 28px; font-weight: 600; letter-spacing: -.02em; }
+html:where([data-theme="business"]) .ap-total.is-before b { color: #6B7280; text-decoration-thickness: 1.5px; }
+html:where([data-theme="business"]) .ap-total.is-after b { color: #111827; }
+html:where([data-theme="business"]) .ap-totals-arrow { color: #9CA3AF; font-size: 18px; }
+html:where([data-theme="business"]) .ap-decision dt { color: #6B7280; }
+html:where([data-theme="business"]) .ap-orig-note { color: #6B7280; }
+
+/* =====================================================================
+   verify.css — Проверка эталона
+   ===================================================================== */
+html:where([data-theme="business"]) .vf-who svg { stroke: var(--good); }
+html:where([data-theme="business"]) .vf-switch { border-radius: 6px; border-color: #D1D5DB; font-size: 14px; padding: 5px 12px; }
+html:where([data-theme="business"]) .vf-switch:hover { border-color: #9CA3AF; }
+html:where([data-theme="business"]) .vf-switch:focus-within { border-color: #D1D5DB; }
+html:where([data-theme="business"]) .vf-note { background: #F9FAFB; border-color: var(--line); border-radius: 6px; color: #374151; }
+html:where([data-theme="business"]) .vf-note.is-warn { background: var(--warn-bg); border-color: #FDE68A; color: #92400E; }
+html:where([data-theme="business"]) .vf-note.is-ok { background: var(--good-bg); border-color: #BBF7D0; color: #166534; }
+html:where([data-theme="business"]) .vf-note.is-info { background: #F9FAFB; border-color: var(--line); color: #374151; }
+html:where([data-theme="business"]) .vf-progress { padding: 14px 20px; margin-bottom: 16px; }
+html:where([data-theme="business"]) .vf-prog-main b { font-size: 20px; font-weight: 600; }
+html:where([data-theme="business"]) .vf-prog-stats { color: #4B5563; }
+html:where([data-theme="business"]) .vf-next { font-weight: 500; font-size: 14px; }
+html:where([data-theme="business"]) .vf-next .cv-svg { color: #6B7280; }
+html:where([data-theme="business"]) .vf-dot { width: 8px; height: 8px; box-shadow: inset 0 0 0 1.5px #D1D5DB; }
+html:where([data-theme="business"]) .vf-st-wip { background: #fff; box-shadow: inset 0 0 0 1.5px var(--warn); }
+html:where([data-theme="business"]) .vf-st-ok { background: var(--good); box-shadow: none; }
+html:where([data-theme="business"]) .vf-st-fixed { background: var(--warn); box-shadow: none; }
+html:where([data-theme="business"]) .vf-t-todo { color: #6B7280; }
+html:where([data-theme="business"]) .vf-list-head { font-size: 12px; font-weight: 500; color: #4B5563; background: var(--bz-head); }
+html:where([data-theme="business"]) .vf-item { border-left: 2px solid transparent; transition: background-color .15s; }
+html:where([data-theme="business"]) .vf-item:hover { background: var(--bz-head); }
+html:where([data-theme="business"]) .vf-item.is-current { background: var(--bz-head); border-left-color: var(--bz-accent); }
+html:where([data-theme="business"]) .vf-item:focus-visible { box-shadow: inset 0 0 0 2px var(--bz-accent); }
+html:where([data-theme="business"]) .vf-item-id { font-size: 13px; font-weight: 500; }
+html:where([data-theme="business"]) .vf-item-other { color: #4B5563; font-size: 12px; }
+html:where([data-theme="business"]) .vf-item-sub .lang { font-size: 11px; }
+html:where([data-theme="business"]) .vf-tr-title { font-size: 14px !important; }
+html:where([data-theme="business"]) .vf-audio { background: #F9FAFB; }
+html:where([data-theme="business"]) .vf-audio svg { stroke: #6B7280; }
+html:where([data-theme="business"]) .vf-crit-scroll { padding: 12px 12px 4px; }
+html:where([data-theme="business"]) .vf-c { border: 1px solid var(--line); border-left: 2px solid var(--line); border-radius: 6px; padding: 12px; }
+html:where([data-theme="business"]) .vf-c.is-empty { border-left-color: var(--line); }
+html:where([data-theme="business"]) .vf-c:not(.is-empty) { border-left-color: #6B7280; }
+html:where([data-theme="business"]) .vf-c.is-diff { border-color: var(--line); border-left-color: var(--warn); background: #fff; }
+html:where([data-theme="business"]) .vf-c:focus-within { box-shadow: 0 0 0 1px var(--bz-accent); border-color: var(--bz-accent); }
+html:where([data-theme="business"]) .vf-key { font-family: var(--font); font-weight: 500; font-size: 12px; color: #4B5563; background: #fff; border-color: #D1D5DB; border-radius: 4px; }
+html:where([data-theme="business"]) .vf-c-title b { font-size: 14px; font-weight: 500; }
+html:where([data-theme="business"]) .vf-seg { border-color: #D1D5DB; border-radius: 6px; }
+html:where([data-theme="business"]) .vf-opt { font-size: 13px; color: #374151; transition: background-color .15s, color .15s; }
+html:where([data-theme="business"]) .vf-opt + .vf-opt { border-left-color: #D1D5DB; }
+html:where([data-theme="business"]) .vf-opt:hover { background: #F9FAFB; }
+html:where([data-theme="business"]) .vf-opt:focus-visible { outline-color: var(--bz-accent); }
+html:where([data-theme="business"]) .vf-opt[aria-checked="true"] { font-weight: 600; }
+html:where([data-theme="business"]) .vf-opt.vf-o-yes[aria-checked="true"] { background: var(--good-bg); color: var(--good); box-shadow: inset 0 0 0 1px var(--good); }
+html:where([data-theme="business"]) .vf-opt.vf-o-no[aria-checked="true"],
+html:where([data-theme="business"]) .vf-opt.vf-o-bad[aria-checked="true"] { background: var(--bad-bg); color: var(--bad); box-shadow: inset 0 0 0 1px var(--bad); }
+html:where([data-theme="business"]) .vf-opt.vf-o-na[aria-checked="true"] { background: var(--bz-fill); color: #111827; box-shadow: inset 0 0 0 1px #6B7280; }
+html:where([data-theme="business"]) .vf-opt.vf-o-sc[aria-checked="true"] { background: #111827; color: #fff; }
+html:where([data-theme="business"]) .vf-opt.is-draft { box-shadow: inset 0 -2px 0 var(--hl-line); }
+html:where([data-theme="business"]) .vf-dmark { color: #713F12; }
+html:where([data-theme="business"]) .vf-help summary { color: var(--bz-accent); font-size: 13px; }
+html:where([data-theme="business"]) .vf-help-in { background: #F9FAFB; border-radius: 6px; color: #374151; font-size: 13px; }
+html:where([data-theme="business"]) .vf-unc { color: #374151; }
+html:where([data-theme="business"]) .vf-foot { border-radius: 0 0 8px 8px; }
+html:where([data-theme="business"]) .vf-foot-bar { height: 3px; background: var(--bz-track); }
+html:where([data-theme="business"]) .vf-foot-bar i { background: #111827; }
+html:where([data-theme="business"]) .vf-foot .btn-primary:not(:disabled) { min-height: 34px; }
+html:where([data-theme="business"]) .vf-sum-kpis { gap: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; display: flex; flex-wrap: wrap; }
+html:where([data-theme="business"]) .vf-sum-kpis > div { flex: 1 1 150px; border: 0; border-radius: 0; box-shadow: -1px 0 0 var(--line), 0 -1px 0 var(--line); padding: 14px 20px; }
+html:where([data-theme="business"]) .vf-sum-kpis b { font-size: 22px; font-weight: 600; letter-spacing: -.015em; }
+html:where([data-theme="business"]) .vf-sum-kpis span { font-size: 13px; color: #4B5563; }
+html:where([data-theme="business"]) .vf-sum-table { border-radius: 8px; }
+html:where([data-theme="business"]) .vf-row-ch td { background: #FFFDF7; }
+html:where([data-theme="business"]) .vf-tr-chip { background: var(--warn-bg); color: #92400E; }
+
+/* =====================================================================
+   responsive
+   ===================================================================== */
+@media (min-width: 761px) and (max-width: 1100px) {
+  html[data-theme="business"] { --sidebar-w: 88px; }
+  html:where([data-theme="business"]) .sidebar { padding: 16px 8px; }
+  html:where([data-theme="business"]) .brand { justify-content: center; padding: 6px 0; }
+  html:where([data-theme="business"]) .brand-text { display: flex; align-items: center; }
+  html:where([data-theme="business"]) .brand-text small { display: none; }
+  html:where([data-theme="business"]) .sidebar nav a { font-size: 12px; min-height: 56px; padding: 8px 4px; gap: 4px; }
+  html:where([data-theme="business"]) .sidebar nav a svg { width: 18px; height: 18px; }
+  html:where([data-theme="business"]) .sidebar nav a.active::before { left: 0; top: 12px; bottom: 12px; }
+  html:where([data-theme="business"]) .sidebar-foot .foot-ic { color: #4B5563; }
+  html:where([data-theme="business"]) .sidebar-foot .foot-ic:hover { background: #EDEEF1; color: #111827; }
+  html:where([data-theme="business"]) .main { padding: 24px 24px 56px; }
+}
+
+@media (max-width: 1100px) {
+  html:where([data-theme="business"]) .cv-grid { grid-template-columns: minmax(0, 1fr); }
+  html:where([data-theme="business"]) .cv-head-score { display: block; }
+}
+
+@media (max-width: 760px) {
+  html:where([data-theme="business"]) .sidebar {
+    background: #fff; border-right: 0; border-bottom: 1px solid var(--line);
+  }
+  html:where([data-theme="business"]) .brand { padding: 0; min-height: 44px; }
+  html:where([data-theme="business"]) .brand-text b { font-size: 16px; }
+  html:where([data-theme="business"]) .sidebar nav {
+    background: #fff; border-top: 1px solid var(--line); box-shadow: none;
+  }
+  html:where([data-theme="business"]) .sidebar nav a {
+    color: #4B5563; font-size: 11px; font-weight: 500; border-radius: 0; min-height: var(--tabbar-h); padding: 6px 2px 5px; gap: 3px;
+  }
+  html:where([data-theme="business"]) .sidebar nav a svg { width: 20px; height: 20px; color: currentColor; }
+  html:where([data-theme="business"]) .sidebar nav a:hover { background: transparent; }
+  html:where([data-theme="business"]) .sidebar nav a.active { background: transparent; color: #111827; box-shadow: none; }
+  html:where([data-theme="business"]) .sidebar nav a.active::before { left: 30%; right: 30%; top: 0; bottom: auto; width: auto; height: 2px; border-radius: 0 0 2px 2px; }
+  html:where([data-theme="business"]) .sidebar nav a:focus-visible { outline-offset: -3px; }
+  html:where([data-theme="business"]) .sidebar-foot { border: 0; padding: 0; }
+  html:where([data-theme="business"]) .main { padding: 16px 16px calc(32px + var(--bottom-inset)); }
+  html:where([data-theme="business"]) .page-head { margin-bottom: 16px; }
+  html:where([data-theme="business"]) .page-head h1 { font-size: 20px; }
+  html:where([data-theme="business"]) .kpis {
+    flex-wrap: nowrap; overflow-x: auto; margin: 0 0 16px; padding: 0; border-radius: 8px; scrollbar-width: none;
+  }
+  html:where([data-theme="business"]) .kpis > .kpi,
+  html:where([data-theme="business"]) .kpis > .card.kpi { flex: 0 0 auto; width: 136px; padding: 12px 14px; }
+  html:where([data-theme="business"]) .kpi .v { font-size: 20px; }
+  html:where([data-theme="business"]) .guide { padding: 14px 0; }
+  html:where([data-theme="business"]) .guide-step { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
+  html:where([data-theme="business"]) .guide-step.is-next { background: #fff; border-color: #D1D5DB; box-shadow: none; }
+  html:where([data-theme="business"]) .guide-mark { margin: 0; }
+  html:where([data-theme="business"]) .guide.is-collapsed { padding: 4px 4px 4px 6px; }
+  html:where([data-theme="business"]) .conv-tools { padding: 12px 14px; }
+  html:where([data-theme="business"]) .table th,
+  html:where([data-theme="business"]) .table td { padding-left: 10px; padding-right: 10px; }
+  html:where([data-theme="business"]) .scorebar .sb-track { width: 36px; }
+  html:where([data-theme="business"]) .cv-head { margin-bottom: 16px; }
+  html:where([data-theme="business"]) .cv-id-title { font-size: 18px; }
+  html:where([data-theme="business"]) .cv-facts { font-size: 13px; gap: 2px 12px; }
+  html:where([data-theme="business"]) .cv-sbadge { padding: 4px 10px; }
+  html:where([data-theme="business"]) .cv-sbadge b { font-size: 18px; }
+  html:where([data-theme="business"]) .cv-msg,
+  html:where([data-theme="business"]) .cv-msg.cv-ctx { padding: 4px 12px; }
+  html:where([data-theme="business"]) .cv-score { flex-direction: row; align-items: flex-start; gap: 20px; padding: 16px; flex-wrap: wrap; }
+  html:where([data-theme="business"]) .cv-score .cv-ring { align-self: flex-start; min-width: 0; }
+  html:where([data-theme="business"]) .cv-score-side { flex: 1 1 200px; }
+  html:where([data-theme="business"]) .cv-score-cap,
+  html:where([data-theme="business"]) .cv-revised { justify-content: flex-start; text-align: left; }
+  html:where([data-theme="business"]) .cv-ring-val b { font-size: 36px; }
+  html:where([data-theme="business"]) .cv-why { margin: 16px 16px 0; padding: 0; }
+  html:where([data-theme="business"]) .cv-banner,
+  html:where([data-theme="business"]) .cv-summary { margin-left: 16px; margin-right: 16px; }
+  html:where([data-theme="business"]) .cv-crit-top { padding: 10px 16px; }
+  html:where([data-theme="business"]) .cv-crit-body { padding: 2px 16px 16px 16px; }
+  html:where([data-theme="business"]) .cv-group-h,
+  html:where([data-theme="business"]) .cv-crits-h { padding-left: 16px; padding-right: 16px; }
+  html:where([data-theme="business"]) .ap-row { padding: 14px 16px; }
+  html:where([data-theme="business"]) .ap-total b { font-size: 24px; }
+  html:where([data-theme="business"]) .card-head { padding: 12px 16px; }
+  html:where([data-theme="business"]) .card-pad { padding: 16px; }
+  html:where([data-theme="business"]) .input,
+  html:where([data-theme="business"]) select.input,
+  html:where([data-theme="business"]) textarea.input { font-size: 16px; }
+  html:where([data-theme="business"]) .toasts { bottom: calc(12px + var(--bottom-inset)); }
+}
+
+@media (pointer: coarse) {
+  html:where([data-theme="business"]) .btn,
+  html:where([data-theme="business"]) .btn-sm { min-height: 44px; }
+  html:where([data-theme="business"]) .btn-icon { width: 44px; height: 44px; }
+  html:where([data-theme="business"]) .chip { min-height: 40px; }
+  html:where([data-theme="business"]) .input,
+  html:where([data-theme="business"]) select.input { min-height: 44px; }
+  html:where([data-theme="business"]) .cv-filter button { min-height: 44px; }
+}
+@media (max-width: 760px), (pointer: coarse) {
+  html:where([data-theme="business"]) .cv-play { min-height: 32px; padding: 2px 8px 2px 6px; }
+  html:where([data-theme="business"]) .cv-why-name { min-height: 44px; display: inline-flex; align-items: center; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html:where([data-theme="business"]) * { transition: none !important; }
+}
