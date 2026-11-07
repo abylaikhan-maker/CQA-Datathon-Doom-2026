@@ -85,8 +85,8 @@ export async function render(root, params, query) {
         </div>
         ${isCall ? `<div id="cv-player-host"></div>` : ""}
         <div class="cv-tr-ctx" id="cv-tr-ctx" hidden></div>
-        <div class="cv-transcript" id="transcript" data-filter="all" tabindex="0" aria-label="Реплики диалога">
-          ${conv.transcript.map((m, i) => msgHtml(m, i + 1, { sec: audioSec[i], playable: isCall && !!conv.audio_url })).join("")}
+        <div class="cv-transcript${isCall ? "" : " cv-transcript--chat"}" id="transcript" data-filter="all" tabindex="0" aria-label="Реплики диалога">
+          ${conv.transcript.map((m, i) => msgHtml(m, i + 1, { chat: !isCall, sec: audioSec[i], playable: isCall && !!conv.audio_url })).join("")}
         </div>
         <button type="button" class="cv-follow" id="cv-follow" hidden>↓ К текущей реплике</button>
       </section>
@@ -107,7 +107,7 @@ export async function render(root, params, query) {
     const el = $(".cv-msg.is-playing", root);
     if (el) scrollInBox(tr, el);
   });
-  $$("[data-filter]", root).forEach((b) => b.addEventListener("click", () => {
+  $$(".cv-filter [data-filter]", root).forEach((b) => b.addEventListener("click", () => {
     setFilter(b.dataset.filter);
     b.closest("details").open = false;
     b.closest("details").querySelector("summary").focus();
@@ -180,7 +180,7 @@ export function onQuery(query) {
 function setFilter(key) {
   const tr = $("#transcript", ctx.root);
   tr.dataset.filter = key;
-  $$("[data-filter]", ctx.root).forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.filter === key)));
+  $$(".cv-filter [data-filter]", ctx.root).forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.filter === key)));
 }
 
 function playAt(n) {

@@ -149,6 +149,46 @@
 .cv-follow { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); z-index: 3; border: 0; border-radius: 8px; background: var(--brand-800); color: #fff; padding: 6px 12px; font-weight: 650; font-size: 12px; cursor: pointer; }
 .cv-follow[hidden] { display: none; }
 
+.cv-tr-card:has(.cv-transcript--chat) .cv-tr-ctx { flex-shrink: 0; }
+.cv-transcript--chat { padding: 7px 6px 10px; }
+.cv-transcript--chat .cv-msg { display: flex; justify-content: flex-end; }
+.cv-transcript--chat .cv-msg + .cv-msg { border-top: 0; margin-top: 9px; }
+.cv-transcript--chat .cv-sp-client { justify-content: flex-start; }
+.cv-transcript--chat .cv-msg .cv-bubble {
+  max-width: min(86%, 36rem);
+  padding: 8px 12px 10px;
+  border: 1px solid var(--brand-200);
+  border-radius: 13px 4px 13px 13px;
+  background: var(--brand-50);
+}
+.cv-transcript--chat .cv-sp-client .cv-bubble {
+  border-color: var(--line);
+  border-radius: 4px 13px 13px 13px;
+  background: var(--surface-2);
+}
+.cv-transcript--chat :is(.cv-sp-bot, .cv-sp-system, .cv-sp-other) .cv-bubble {
+  border-color: var(--line);
+  background: var(--surface);
+}
+.cv-transcript--chat .cv-mhead { margin-bottom: 3px; }
+.cv-transcript--chat .cv-mhead .cv-who { order: 0; color: var(--ink-2); }
+.cv-transcript--chat .cv-mhead .cv-n { order: 1; }
+.cv-transcript--chat .cv-mhead .cv-ts { order: 2; }
+.cv-transcript--chat .cv-mhead .cv-ts::after { content: none; }
+.cv-transcript--chat :is(.cv-n, .cv-ts, .cv-who) { font-size: 12px; }
+.cv-transcript--chat .cv-text { font-size: 15px; }
+.cv-transcript--chat :is(.cv-sp-bot, .cv-sp-system, .cv-sp-other) .cv-text { font-size: 14px; color: var(--ink-2); }
+.cv-transcript--chat .cv-msg:is(.in-range, .is-evidence, .is-focus, .is-flash) {
+  background: none;
+  box-shadow: none;
+  animation: none;
+}
+.cv-transcript--chat .cv-msg.in-range .cv-bubble { border-color: var(--brand-300); }
+.cv-transcript--chat .cv-msg.is-evidence .cv-bubble { background: var(--brand-100); border-color: var(--brand-600); }
+.is-critical-evidence .cv-transcript--chat .cv-msg.is-evidence .cv-bubble { background: var(--bad-bg); border-color: var(--hl-line); }
+.cv-transcript--chat .cv-msg.is-focus .cv-bubble { box-shadow: 0 0 0 2px var(--brand-300); }
+.cv-transcript--chat .cv-msg.is-flash .cv-bubble { animation: cv-flash .8s ease-out; }
+
 /* ---------- evaluation panel ---------- */
 .cv-ev-head { flex-wrap: wrap; row-gap: 8px; padding-bottom: 8px; }
 .cv-ev-head .cv-hist { width: auto; max-width: min(100%, 230px); font-size: 12.5px; padding: 5px 8px; }

@@ -10,9 +10,9 @@ const isContext = (k) => k === "bot" || k === "system" || k === "other";
 
 /**
  * One transcript message.
- * opts: { sec: seconds from start (calls), playable: show ▶ button, cls: extra classes, idPrefix }
+ * opts: { chat: render all roles as bubbles, sec: seconds from start (calls), playable: show ▶ button, cls: extra classes, idPrefix }
  */
-export function msgHtml(m, n, { sec = null, playable = false, cls = "", idPrefix = "msg-" } = {}) {
+export function msgHtml(m, n, { chat = false, sec = null, playable = false, cls = "", idPrefix = "msg-" } = {}) {
   const k = speakerKind(m.speaker);
   const who = SPEAKER[k] || m.speaker || "—";
   const ts = m.timestamp ? `<span class="cv-ts" title="${esc(m.timestamp)}">${esc(fmtTs(m.timestamp))}</span>` : "";
@@ -20,7 +20,7 @@ export function msgHtml(m, n, { sec = null, playable = false, cls = "", idPrefix
     ? `<button type="button" class="cv-play" data-play="${n}" aria-label="Прослушать реплику #${n} с ${fmtClock(sec)}">
          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg>${fmtClock(sec)}</button>`
     : "";
-  if (isContext(k)) {
+  if (isContext(k) && !chat) {
     return `
       <div class="cv-msg cv-ctx cv-sp-${k} ${cls}" id="${idPrefix}${n}" data-n="${n}" data-sp="${k}">
         <div class="cv-ctx-in">
