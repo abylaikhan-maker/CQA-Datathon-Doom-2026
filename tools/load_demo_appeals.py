@@ -4,7 +4,7 @@ Each appeal is filed against the latest evaluation of the conversation with the 
 then decided (change / confirm) unless marked "open". Changed decisions are also saved as control
 examples for «Проверка правила». Already appealed criteria are skipped, so the script can be re-run.
 
-usage: python tools/load_demo_appeals.py http://127.0.0.1:8090 [checklist_id]
+usage: python tools/load_demo_appeals.py http://127.0.0.1:8090 [checklist_id] [appeals.json]
 """
 import json
 import sys
@@ -13,7 +13,8 @@ import urllib.request
 from pathlib import Path
 
 BASE = sys.argv[1].rstrip("/")
-DATA = json.loads((Path(__file__).resolve().parent.parent / "samples" / "demo_appeals.json").read_text())
+DEFAULT = Path(__file__).resolve().parent.parent / "samples" / "demo_appeals.json"
+DATA = json.loads(Path(sys.argv[3] if len(sys.argv) > 3 else DEFAULT).read_text())
 
 
 def call(method, path, body=None):
@@ -27,7 +28,7 @@ def call(method, path, body=None):
         raise SystemExit(f"{method} {path}: {e.code} {e.read().decode()[:300]}")
 
 
-kid = int(sys.argv[2]) if len(sys.argv) > 2 else next(c["id"] for c in call("GET", "/api/checklists") if c["is_active"])
+kid = int(sys.argv[2]) if len(sys.argv) > 2 and sys.argv[2] else next(c["id"] for c in call("GET", "/api/checklists") if c["is_active"])
 made = []
 for a in DATA["appeals"]:
     conv = call("GET", f"/api/conversations/{a['conversation_id']}")
