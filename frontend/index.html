@@ -16,13 +16,6 @@
   <script>
     // API base. In Dynamics 365 set window.CQA_CONFIG = { apiBase: "https://cqa.example.com" } before app.js.
     window.CQA_CONFIG = window.CQA_CONFIG || { apiBase: "" };
-    // Theme before first paint: saved choice, else the system setting.
-    (function () {
-      var t = null;
-      try { t = localStorage.getItem("cqa.theme"); } catch (e) {}
-      if (t !== "light" && t !== "dark") t = window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-      document.documentElement.setAttribute("data-theme", t);
-    })();
   </script>
 </head>
 <body>
@@ -47,11 +40,6 @@
         <a href="#/operators" data-nav="operators"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.6 3.2-5.5 6.5-5.5s5.9 1.9 6.5 5.5"/><path d="M15.5 4.8a3.5 3.5 0 0 1 0 6.4M18 14.8c2 .7 3.2 2.4 3.5 5.2"/></svg><span class="nav-t">Операторы</span></a>
         <a href="#/accuracy" data-nav="accuracy"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="0.8"/></svg><span class="nav-t">Точность<span class="nav-t-x"> оценок</span></span></a>
       </nav>
-      <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Переключить тему">
-        <svg class="tt-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>
-        <svg class="tt-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
-        <span><span class="tt-light">Тёмная тема</span><span class="tt-dark">Светлая тема</span></span>
-      </button>
       <div class="sidebar-foot" id="meta-info"></div>
     </aside>
     <main id="view" class="main" tabindex="-1" aria-busy="false"></main>

@@ -15,12 +15,6 @@ async function req(method, path, body, raw = false) {
     }
   }
   const r = await fetch(base() + path, opts);
-  if (r.status === 401 && !base()) {
-    // Google sign-in gate (nginx + oauth2-proxy): remember the screen, then sign in.
-    try { sessionStorage.setItem("cqa.returnTo", location.hash); } catch { /* ignore */ }
-    location.href = "/oauth2/sign_in?rd=" + encodeURIComponent("/");
-    throw new Error("Требуется вход");
-  }
   const text = await r.text();
   let data = null;
   try { data = text ? JSON.parse(text) : null; } catch { data = text; }

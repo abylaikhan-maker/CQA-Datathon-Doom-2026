@@ -141,26 +141,14 @@ export async function refreshBadge() {
 
 async function loadMeta() {
   try {
-    const [m, me] = await Promise.all([api.meta(), api.me()]);
-    window.CQA_USER = me.email || null;
-    const email = me.email || "";
+    const m = await api.meta();
+    window.CQA_USER = null; // no sign-in: authors and reviewers type their name
     document.getElementById("meta-info").innerHTML =
-      (email ? `
-        <div class="user">
-          <span class="ava" title="${esc(email)}" aria-hidden="true">${esc(email.slice(0, 1))}</span>
-          <span class="who"><span class="email" title="${esc(email)}">${esc(email)}</span><a href="/oauth2/sign_out?rd=%2F">Выйти</a></span>
-          <a class="foot-ic logout-ic" href="/oauth2/sign_out?rd=%2F" title="Выйти (${esc(email)})" aria-label="Выйти из аккаунта ${esc(email)}">${icon("logout")}</a>
-        </div>` : "") +
       `<div class="model" title="Модель: ${esc(m.model)}"><span class="dot" aria-hidden="true"></span><span class="model-t">Модель: <b>${esc(m.model)}</b></span></div>` +
       (m.provider === "mock" ? `<div class="mock" title="Демо-режим: ключ LLM не задан, оценки — простые эвристики">${icon("alert")}<span class="mock-t">Демо-режим · оценки по эвристикам</span></div>` : "");
   } catch { /* ignore */ }
 }
 
-// Back from Google sign-in: restore the screen the user was on.
-try {
-  const back = sessionStorage.getItem("cqa.returnTo");
-  if (back) { sessionStorage.removeItem("cqa.returnTo"); if (!location.hash) location.hash = back; }
-} catch { /* ignore */ }
 
 // The skip link must not change the hash (that would navigate).
 document.getElementById("skip-link")?.addEventListener("click", (e) => {
@@ -168,23 +156,6 @@ document.getElementById("skip-link")?.addEventListener("click", (e) => {
   document.getElementById("view").focus();
 });
 
-// Light / dark theme: the <head> script applied it before paint; this keeps it in sync.
-function applyTheme(t, save) {
-  document.documentElement.setAttribute("data-theme", t);
-  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", t === "dark" ? "#060e0a" : "#07100c");
-  const b = document.getElementById("theme-toggle");
-  if (b) { b.setAttribute("aria-pressed", String(t === "dark")); b.title = t === "dark" ? "Включить светлую тему" : "Включить тёмную тему"; }
-  if (save) { try { localStorage.setItem("cqa.theme", t); } catch { /* ignore */ } }
-}
-applyTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light", false);
-document.getElementById("theme-toggle")?.addEventListener("click", () => {
-  applyTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark", true);
-});
-window.matchMedia?.("(prefers-color-scheme: dark)").addEventListener?.("change", (e) => {
-  let saved = null;
-  try { saved = localStorage.getItem("cqa.theme"); } catch { /* ignore */ }
-  if (!saved) applyTheme(e.matches ? "dark" : "light", false);
-});
 
 window.addEventListener("hashchange", route);
 loadMeta();

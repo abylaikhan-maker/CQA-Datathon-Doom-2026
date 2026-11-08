@@ -66,7 +66,8 @@ async def health():
 
 
 def user_email(request: Request) -> str | None:
-    """Signed-in user from the Google gate. nginx overwrites X-Auth-Email, so it cannot be forged from outside."""
+    """User e-mail from a sign-in gate in front of the app (X-Auth-Email), if there is one.
+    The IP deployment has no gate; its nginx clears this header so it cannot be forged."""
     return (request.headers.get("x-auth-email") or "").strip() or None
 
 
