@@ -26,7 +26,8 @@ CRITERIA = {
     "c07": ("closure", "binary", 5, True, []),
     "c08": ("critical", "critical", 0, False, []),
 }
-CHANNEL_COUNTS = {"dev": {"agent chat": 60, "voice call": 5}, "prod": {"agent chat": 10}}
+# dev = DEV (60 chats + 5 calls), prod = the 10 control chats (FBroker), swap = 3 extra chats (Swap).
+CHANNEL_COUNTS = {"dev": {"agent chat": 60, "voice call": 5}, "prod": {"agent chat": 10}, "swap": {"agent chat": 3}}
 
 
 def read_json(path: Path):
