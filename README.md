@@ -113,7 +113,7 @@ python3 tools/accuracy.py --api http://localhost:8090 --group SYNTH --gt samples
 python3 tools/push_checklist.py --api http://localhost:8090 --note "что изменено"   # загрузить чек-лист из файла новой версией
 ```
 
-## Результаты команды «−60HZ»
+## Результаты команды «Девушка Простушка»
 
 | Файл | Набор | Диалогов | Прогон в приложении |
 |---|---|---|---|
