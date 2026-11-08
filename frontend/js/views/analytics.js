@@ -47,7 +47,6 @@ export function charts(s, rows, done, cfg, cl) {
   // Criteria in checklist order, then any extra ids found in the stats.
   const metaById = Object.fromEntries((cfg.criteria || []).map((c) => [c.id, c]));
   const ids = [...(cfg.criteria || []).map((c) => c.id).filter((id) => s.criteria[id]), ...Object.keys(s.criteria).filter((id) => !metaById[id])];
-  const secTitle = Object.fromEntries((cfg.sections || []).map((x) => [x.id, x.title]));
   const scoredW = (cfg.criteria || []).filter((c) => c.type !== "critical").reduce((a, c) => a + Number(c.weight || 0), 0);
   const rowsData = ids.map((id) => {
     const d = s.criteria[id], c = metaById[id] || { id, title: id, type: d.scale ? "scale" : "binary" };
@@ -94,7 +93,7 @@ export function charts(s, rows, done, cfg, cl) {
             const share = c.type !== "critical" && scoredW ? (Number(c.weight || 0) / scoredW) * 100 : null;
             const href = isCrit ? dlgLink({ crit: "violation" }) : dlgLink({ col: `${c.id}:Нет` });
             return `<tr class="click" data-href="${esc(href)}" title="${isCrit ? "Показать диалоги с нарушением" : "Показать диалоги, где по критерию «Нет»"}" ${isCrit && d.yes ? 'style="background:var(--bad-soft)"' : ""}>
-              <td><span class="ct-title"><span><span class="mono muted">${esc(c.code || "")}</span> <a href="${esc(href)}"><b>${esc(c.title)}</b></a></span>${secTitle[c.section] ? `<small>${esc(secTitle[c.section])}</small>` : ""}</span></td>
+              <td><span class="ct-title"><span><span class="mono muted">${esc(c.code || "")}</span> <a href="${esc(href)}"><b>${esc(c.title)}</b></a></span></span></td>
               <td class="small muted col-opt">${typeShort(c)}</td>
               <td class="num col-opt" title="${share !== null ? `${fmtNum(share, 1)}% итога` : "без баллов"}">${c.type === "critical" ? "—" : fmtNum(c.weight)}</td>
               <td class="num col-opt">${c.type === "scale" ? "—" : yes}</td>

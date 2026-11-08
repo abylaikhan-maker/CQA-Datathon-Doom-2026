@@ -436,16 +436,7 @@ function drawEvaluation(ev) {
   const canAppeal = cfg.criteria.some((c) => rowsBy[c.id] && !(appealsBy[c.id] || []).some((a) => a.status === "open"));
   const anyRevised = ev.final_criteria.some((r) => isRevised(r, origRows[r.criterion_id]));
 
-  // Criteria grouped by checklist section, in checklist order.
-  const sectionTitle = Object.fromEntries((cfg.sections || []).map((s) => [s.id, s.title]));
-  const secScore = Object.fromEntries((score.sections || []).map((s) => [s.section_id, s]));
-  const groups = [];
-  cfg.criteria.forEach((c) => {
-    if (!rowsBy[c.id]) return;
-    let g = groups.find((x) => x.id === (c.section || ""));
-    if (!g) groups.push((g = { id: c.section || "", items: [] }));
-    g.items.push(c);
-  });
+  const ordered = cfg.criteria.filter((c) => rowsBy[c.id]);
 
   const critical = score.critical
     ? `<div class="cv-banner is-crit" role="alert">
@@ -471,13 +462,6 @@ function drawEvaluation(ev) {
         : resolved ? `<div class="cv-muted-s">Апелляции рассмотрены (${resolved}), итог не изменился</div>` : ""}
         ${openApp ? `<div><span class="cv-tag is-warn">${cvIcon("hourglass")}${openApp} ${plural(openApp, "апелляция", "апелляции", "апелляций")} на рассмотрении</span></div>` : ""}
         ${score.total === null ? `<div class="cv-note cv-note-na">Итог не рассчитывается: нет применимых критериев с весом.</div>` : ""}
-        <div class="cv-secs">
-          ${(score.sections || []).filter((s) => s.max_points !== null).map((s) => {
-            const pct = s.max_points ? (s.points / s.max_points) * 100 : 0;
-            return `<div class="cv-sec"><span>${esc(s.title)}</span><b>${fmtNum(s.points)} / ${fmtNum(s.max_points)}</b>
-              <div class="cv-bar cv-tone-${pct >= 85 ? "hi" : pct >= 65 ? "mid" : "lo"}"><i style="width:${pct.toFixed(1)}%"></i></div></div>`;
-          }).join("")}
-        </div>
       </div>
     </div>
     ${previous ? `<div class="cv-version-compare">
@@ -500,17 +484,10 @@ function drawEvaluation(ev) {
     <div class="cv-crits" id="crit-list">
       <div class="cv-crits-h"><h3>Все критерии</h3><span class="cv-muted-s">откройте критерий, чтобы увидеть объяснение и реплики</span>
         <button type="button" class="btn btn-sm cv-appeal-main" data-appeal-all ${canAppeal ? "" : "disabled"}>${cvIcon("scale")}Оспорить оценку</button></div>
-      ${groups.map((g) => {
-        const ss = secScore[g.id];
-        return `<div class="cv-group">
-          <div class="cv-group-h"><span>${esc(sectionTitle[g.id] || ss?.title || "")}</span>
-            ${ss ? `<span>${ss.max_points !== null ? `${fmtNum(ss.points)} / ${fmtNum(ss.max_points)}` : g.items.every((c) => rowsBy[c.id].answer === "na") ? "все N/A, вес перераспределён" : "без баллов"}</span>` : ""}</div>
-          ${g.items.map((c) => critHtml({
-            row: rowsBy[c.id], crit: c, srow: scoreRows[c.id], orow: origRows[c.id], appeals: appealsBy[c.id] || [],
-            msgs: ctx.conv.transcript, rel: ctx.rel, canAppeal: true, open: ctx.openCrit === c.id,
-          })).join("")}
-        </div>`;
-      }).join("")}
+      ${ordered.map((c) => critHtml({
+        row: rowsBy[c.id], crit: c, srow: scoreRows[c.id], orow: origRows[c.id], appeals: appealsBy[c.id] || [],
+        msgs: ctx.conv.transcript, rel: ctx.rel, canAppeal: true, open: ctx.openCrit === c.id,
+      })).join("")}
     </div>
     ${metaHtml(ev)}`;
 

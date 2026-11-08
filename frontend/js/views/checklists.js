@@ -47,7 +47,7 @@ export async function render(root, params, query = {}) {
   base = current.id ? structuredClone(current.config) : null;
   openSet = new Set();
   newSet = new Set();
-  settingsOpen = !current.id; // a new checklist starts with its name and sections visible
+  settingsOpen = !current.id; // a new checklist starts with its name visible
   showErrs = false;
   const meta = list.find((c) => c.id === current.id);
   const source = family.some((c) => c.id === current.id) ? feedback.appeal : null;
@@ -309,13 +309,6 @@ function validate() {
   const e = {};
   if (!String(draft.name || "").trim()) e.name = "Укажите название чек-листа";
   if (!draft.criteria.length) e.criteria = "Добавьте хотя бы один критерий";
-  const secIds = new Set();
-  draft.sections.forEach((s, i) => {
-    const id = String(s.id || "").trim();
-    if (!id) e[`sections.${i}.id`] = "Пустой id";
-    else if (secIds.has(id)) e[`sections.${i}.id`] = "id повторяется";
-    secIds.add(id);
-  });
   const seen = {};
   draft.criteria.forEach((c) => { const id = String(c.id || "").trim(); if (id) seen[id] = (seen[id] || 0) + 1; });
   draft.criteria.forEach((c, i) => {
@@ -325,7 +318,6 @@ function validate() {
     else if (seen[id] > 1) e[k("id")] = "ID повторяется";
     if (!String(c.title || "").trim()) e[k("title")] = "Укажите название критерия";
     if (c.type !== "critical" && Number(c.weight) < 0) e[k("weight")] = "Вес не может быть отрицательным";
-    if (c.section && secIds.size && !secIds.has(c.section)) e[k("section")] = "Секция не найдена";
     if (c.type === "scale") {
       const vals = (c.scale || []).map((s) => (s.value === "" || s.value === null ? NaN : Number(s.value)));
       if (vals.some((v) => !Number.isFinite(v))) e[k("scale")] = "У каждой ступени должен быть балл";
@@ -453,13 +445,12 @@ function isDirty() {
 function errSlot(key) { return `<small class="field-err" data-err="${esc(key)}" role="alert"></small>`; }
 
 function drawEditor(el, focusKey) {
-  const secUse = (id) => draft.criteria.filter((c) => c.section === id).length;
   el.innerHTML = `
     <details class="ed-settings" id="ed-settings" ${settingsOpen ? "open" : ""}>
       <summary>
         <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
         <span class="ed-settings-t">Настройки чек-листа</span>
-        <span class="ed-settings-sub">название, общие правила для модели, ${draft.sections.length} ${plural(draft.sections.length, ["секция", "секции", "секций"])}</span>
+        <span class="ed-settings-sub">название, описание, общие правила для модели</span>
         <span class="err-dot" title="Есть ошибки"></span>
       </summary>
       <div class="ed-settings-body">
@@ -469,19 +460,6 @@ function drawEditor(el, focusKey) {
           <label class="field span6">Описание<input class="input" data-k="description" value="${esc(draft.description || "")}" placeholder="Коротко: для чего этот чек-лист"></label>
           <label class="field span6">Общие правила для оценщика <span class="hint">контекст, который модель получает вместе с критериями</span>
             <textarea class="input" rows="4" data-k="general_rules">${esc(draft.general_rules || "")}</textarea></label>
-        </div>
-        <div class="ed-sub">Секции <span class="hint">группируют критерии в разборе и в итоге</span></div>
-        <div class="sec-list">
-          ${draft.sections.length ? `<div class="sec-head" aria-hidden="true"><span>Название</span><span>Код секции</span><span class="sec-n">Критериев</span><span></span></div>` : ""}
-          ${draft.sections.map((s, i) => `
-            <div class="sec-ed" data-si="${i}">
-              <label class="field"><span class="sr-only">Название секции ${i + 1}</span><input class="input" data-k="sections.${i}.title" value="${esc(s.title)}" placeholder="Название секции"></label>
-              <label class="field"><span class="sr-only">Код секции ${i + 1}</span><input class="input mono sec-id" data-k="sections.${i}.id" value="${esc(s.id)}" placeholder="id" spellcheck="false">${errSlot(`sections.${i}.id`)}</label>
-              <span class="sec-n num-t" title="Критериев в секции">${secUse(s.id)}</span>
-              <button class="btn btn-sm btn-ghost btn-danger btn-icon" type="button" data-act="del-section" data-i="${i}" aria-label="Удалить секцию ${esc(s.title || s.id)}" title="Удалить секцию">${icon("trash")}</button>
-            </div>`).join("")}
-          <div class="sec-foot"><button class="btn btn-sm" type="button" data-act="add-section">${icon("plus")}Добавить секцию</button>
-            <span class="hint">Код секции хранится в оценках — у существующих секций его лучше не менять.</span></div>
         </div>
       </div>
     </details>
@@ -527,11 +505,6 @@ function critEditor(c, i) {
         <label class="field span4">Название<input class="input" data-k="${k("title")}" value="${esc(c.title)}" placeholder="Например: Установление контакта">${errSlot(k("title"))}</label>
         <label class="field">Код<input class="input" data-k="${k("code")}" value="${esc(c.code || "")}"></label>
         <label class="field">Идентификатор<input class="input mono" data-k="${k("id")}" value="${esc(c.id)}" spellcheck="false">${errSlot(k("id"))}</label>
-        <label class="field span2">Секция
-          <select class="input" data-k="${k("section")}">
-            <option value="">—</option>
-            ${draft.sections.map((s) => `<option value="${esc(s.id)}" ${s.id === c.section ? "selected" : ""}>${esc(s.title || s.id)}</option>`).join("")}
-          </select>${errSlot(k("section"))}</label>
         <label class="field span2">Тип ответа
           <select class="input" data-k="${k("type")}" data-redraw>
             ${Object.entries(TYPE_LABEL).map(([v, l]) => `<option value="${v}" ${v === c.type ? "selected" : ""}>${esc(l)}</option>`).join("")}
@@ -577,13 +550,8 @@ function paint(el) {
     $("[data-h=code]", card).textContent = c.code || "";
     $("[data-h=weight]", card).textContent = c.type === "critical" ? "без баллов" : `вес ${fmtNum(c.weight)} · ${fmtNum(share(c), 1)}%`;
   });
-  $$(".sec-ed", el).forEach((row) => {
-    const sec = draft.sections[Number(row.dataset.si)];
-    const n = $(".sec-n", row);
-    if (sec && n) n.textContent = draft.criteria.filter((c) => c.section === sec.id).length;
-  });
   const set = $("#ed-settings", el);
-  if (set) set.classList.toggle("has-err", Object.keys(errs).some((k) => k === "name" || k.startsWith("sections.")));
+  if (set) set.classList.toggle("has-err", Object.keys(errs).some((k) => k === "name"));
   paintWeights(el);
   paintSaveBar(el, errs);
 }
@@ -786,6 +754,8 @@ function cleanConfig() {
   const cfg = structuredClone(draft);
   cfg.name = String(cfg.name || "").trim();
   cfg.sections = cfg.sections.map((s) => ({ ...s, id: String(s.id).trim() }));
+  const secIds = new Set(cfg.sections.map((s) => s.id));
+  cfg.criteria.forEach((c) => { if (c.section && !secIds.has(c.section)) c.section = cfg.sections[0]?.id || ""; });
   cfg.criteria.forEach((c) => {
     c.id = String(c.id).trim();
     c.title = String(c.title).trim();
