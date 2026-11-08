@@ -155,3 +155,30 @@ CREATE TABLE IF NOT EXISTS regulation_runs (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS regulation_one_running_per_group_idx
     ON regulation_runs (dataset_group) WHERE status = 'running';
+
+-- Who handled the conversation and when (derived in operators.py; NULL = unknown).
+ALTER TABLE conversations ADD COLUMN IF NOT EXISTS operator TEXT;
+ALTER TABLE conversations ADD COLUMN IF NOT EXISTS started_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS conversations_operator_idx ON conversations (operator);
+
+-- AI reviews of the operator team (scope=team) or of one operator (scope=operator) for a period.
+CREATE TABLE IF NOT EXISTS team_reviews (
+    id            SERIAL PRIMARY KEY,
+    scope         TEXT NOT NULL DEFAULT 'team',
+    operator      TEXT,
+    date_from     DATE,
+    date_to       DATE,
+    dataset_group TEXT,
+    checklist_id  INT REFERENCES checklists(id) ON DELETE SET NULL,
+    status        TEXT NOT NULL DEFAULT 'running',     -- running | done | error
+    error         TEXT,
+    stats         JSONB,
+    result        JSONB,
+    model         TEXT,
+    usage         JSONB,
+    cost_usd      DOUBLE PRECISION,
+    duration_ms   INT,
+    author        TEXT,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    finished_at   TIMESTAMPTZ
+);

@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="static/css/accuracy.css">
   <link rel="stylesheet" href="static/css/regulations.css">
   <link rel="stylesheet" href="static/css/verify.css">
+  <link rel="stylesheet" href="static/css/team.css">
   <script>
     // API base. In Dynamics 365 set window.CQA_CONFIG = { apiBase: "https://cqa.example.com" } before app.js.
     window.CQA_CONFIG = window.CQA_CONFIG || { apiBase: "" };
@@ -42,6 +43,8 @@
         <a href="#/appeals" data-nav="appeals"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M5 7h14M5 7l-3 7h6zM19 7l-3 7h6zM8 21h8"/></svg><span class="nav-t">Апелляции</span><b class="nav-badge" id="appeals-badge" hidden></b></a>
         <a href="#/rules" data-nav="rules"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19h10M4 15h7"/><path d="M14.5 4.5l5 5L12 17H7v-5z"/></svg><span class="nav-t">Правила<span class="nav-t-x"> из апелляций</span></span></a>
         <div class="nav-label">Отчёты</div>
+        <a href="#/ai-review" data-nav="ai-review"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M18.5 15.5l.9 2.1 2.1.9-2.1.9-.9 2.1-.9-2.1-2.1-.9 2.1-.9z"/></svg><span class="nav-t">ИИ-обзор</span></a>
+        <a href="#/operators" data-nav="operators"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.6 3.2-5.5 6.5-5.5s5.9 1.9 6.5 5.5"/><path d="M15.5 4.8a3.5 3.5 0 0 1 0 6.4M18 14.8c2 .7 3.2 2.4 3.5 5.2"/></svg><span class="nav-t">Операторы</span></a>
         <a href="#/accuracy" data-nav="accuracy"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="0.8"/></svg><span class="nav-t">Точность<span class="nav-t-x"> оценок</span></span></a>
       </nav>
       <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Переключить тему">

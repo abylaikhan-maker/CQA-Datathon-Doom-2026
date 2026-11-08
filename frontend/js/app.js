@@ -13,6 +13,8 @@ import * as accuracy from "./views/accuracy.js";
 import * as regulations from "./views/regulations.js";
 import * as verify from "./views/verify.js";
 import * as rules from "./views/rules.js";
+import * as aiReview from "./views/ai-review.js";
+import * as operators from "./views/operators.js";
 
 const routes = [
   { re: /^\/conversations$/, view: conversations, nav: "conversations", title: "Диалоги", skel: "list" },
@@ -22,6 +24,9 @@ const routes = [
   { re: /^\/checklists\/(\d+)\/rule-check$/, view: ruleCheck, nav: "checklists", keys: ["id"], title: "Проверка правила", skel: "list" },
   { re: /^\/appeals$/, view: appeals, nav: "appeals", title: "Апелляции", skel: "split" },
   { re: /^\/appeals\/(\d+)$/, view: appeals, nav: "appeals", keys: ["id"], title: "Апелляции", skel: "split" },
+  { re: /^\/ai-review$/, view: aiReview, nav: "ai-review", title: "ИИ-обзор", skel: "list" },
+  { re: /^\/operators$/, view: operators, nav: "operators", title: "Операторы", skel: "list" },
+  { re: /^\/operators\/(.+)$/, view: operators, nav: "operators", keys: ["id"], title: "Оператор", skel: "list" },
   { re: /^\/accuracy$/, view: accuracy, nav: "accuracy", title: "Точность", skel: "list" },
   { re: /^\/(overview|analytics)$/, view: overview, nav: "overview", title: "Обзор", skel: "list" },
   { re: /^\/rules$/, view: rules, nav: "rules", title: "Правила из апелляций", skel: "list" },
@@ -77,6 +82,8 @@ async function route() {
     const on = a.dataset.nav === m.r.nav;
     a.classList.toggle("active", on);
     if (on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
+    // Mobile tab bar scrolls sideways: keep the current section in view.
+    if (on && a.parentElement.scrollWidth > a.parentElement.clientWidth) a.scrollIntoView({ block: "nearest", inline: "nearest" });
   });
   document.title = `${m.r.title} · CQA`;
   // Progress of the first-run guide on «Диалоги» (steps that have no server-side trace).

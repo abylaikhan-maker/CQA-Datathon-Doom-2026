@@ -91,6 +91,12 @@ export const api = {
   saveAppealCase: (id, body) => req("PATCH", `/api/appeals/${id}/case`, body),
   decide: (id, body) => req("POST", `/api/appeals/${id}/decision`, body),
 
+  teamOperators: (params = {}) => req("GET", "/api/team/operators" + qs(params)),
+  teamOperator: (key, params = {}) => req("GET", `/api/team/operators/${encodeURIComponent(key)}` + qs(params)),
+  teamReviews: (params = {}) => req("GET", "/api/team/reviews" + qs(params)),
+  teamReview: (id) => req("GET", `/api/team/reviews/${id}`),
+  createTeamReview: (body) => req("POST", "/api/team/reviews", body),
+
   stats: (params = {}) => req("GET", "/api/stats" + qs(params)),
   exportUrl: (params = {}) => base() + "/api/export.csv" + qs(params),
 };

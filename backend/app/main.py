@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, StringConstraints
 
-from . import accuracy, config, dataset, db, evaluator, regulations, rule_checks, scoring, version
+from . import accuracy, config, dataset, db, evaluator, operators, regulations, rule_checks, scoring, team, version
 
 _bg: set[asyncio.Task] = set()
 
@@ -32,6 +32,8 @@ async def lifespan(_: FastAPI):
         await conn.execute("UPDATE evaluations SET status='error', error='interrupted by restart' "
                            "WHERE status IN ('pending','running')")
         await conn.execute("UPDATE batches SET status='finished', finished_at=now() WHERE status='running'")
+        await conn.execute("UPDATE team_reviews SET status='error', error='Обзор прерван перезапуском сервиса.', "
+                           "finished_at=now() WHERE status='running'")
         await conn.execute(
             """UPDATE regulation_runs SET status='error', error='Сверка прервана перезапуском сервиса.',
                       finished_at=now() WHERE status='running'"""
@@ -43,6 +45,7 @@ async def lifespan(_: FastAPI):
 app = FastAPI(title="CQA — Conversation Quality Analytics", lifespan=lifespan)
 app.include_router(rule_checks.router)
 app.include_router(regulations.router)
+app.include_router(team.router)
 
 
 @app.exception_handler(dataset.DatasetError)
@@ -94,12 +97,15 @@ async def upsert(group: str, records: list[dict]) -> int:
         async with conn.transaction():
             for r in records:
                 await conn.execute(
-                    """INSERT INTO conversations (id, dataset_group, channel, language, transcript, audio_url, raw)
-                       VALUES ($1,$2,$3,$4,$5,$6,$7)
+                    """INSERT INTO conversations (id, dataset_group, channel, language, transcript, audio_url, raw,
+                                                  operator, started_at)
+                       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
                        ON CONFLICT (id) DO UPDATE SET dataset_group=EXCLUDED.dataset_group, channel=EXCLUDED.channel,
                          language=EXCLUDED.language, transcript=EXCLUDED.transcript, audio_url=EXCLUDED.audio_url,
-                         raw=EXCLUDED.raw, imported_at=now()""",
-                    r["id"], group, r["channel"], r["language"], r["transcript"], r["audio_url"], r["raw"])
+                         raw=EXCLUDED.raw, operator=EXCLUDED.operator, started_at=EXCLUDED.started_at,
+                         imported_at=now()""",
+                    r["id"], group, r["channel"], r["language"], r["transcript"], r["audio_url"], r["raw"],
+                    operators.detect_operator(r["raw"], r["transcript"]), operators.detect_started_at(r["raw"]))
     return len(records)
 
 
@@ -137,6 +143,7 @@ async def list_conversations(group: str | None = None, checklist_id: int | None 
     async with db.pool.acquire() as conn:
         rows = await conn.fetch(
             """SELECT c.id, c.dataset_group, c.channel, c.language, c.audio_url, c.raw->>'title' AS title,
+                      c.operator, coalesce(c.started_at, c.imported_at) AS started_at,
                       jsonb_array_length(c.transcript) AS messages,
                       e.id AS eval_id, e.status, e.total, e.final_total, e.critical, e.checklist_id,
                       e.final_score->>'critical' AS final_critical, e.error,
@@ -155,7 +162,8 @@ async def list_conversations(group: str | None = None, checklist_id: int | None 
 @app.get("/api/conversations/{cid}")
 async def get_conversation(cid: str):
     async with db.pool.acquire() as conn:
-        c = await conn.fetchrow("SELECT id, dataset_group, channel, language, transcript, audio_url, imported_at, raw->>'title' AS title "
+        c = await conn.fetchrow("SELECT id, dataset_group, channel, language, transcript, audio_url, imported_at, raw->>'title' AS title, "
+                                "operator, coalesce(started_at, imported_at) AS started_at "
                                 "FROM conversations WHERE id=$1", cid)
         if not c:
             not_found("Диалог")

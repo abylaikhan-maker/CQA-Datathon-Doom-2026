@@ -4,7 +4,7 @@ from pathlib import Path
 
 import asyncpg
 
-from . import config
+from . import config, operators
 
 pool: asyncpg.Pool | None = None
 
@@ -35,6 +35,7 @@ async def connect() -> None:
                 "INSERT INTO checklists (name, version, config, is_active, note) VALUES ($1, 1, $2, true, $3)",
                 cfg["name"], cfg, "Начальная конфигурация из PDF",
             )
+        await operators.backfill(conn)
 
 
 async def close() -> None:
